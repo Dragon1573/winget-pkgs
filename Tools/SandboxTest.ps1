@@ -103,6 +103,15 @@ $script:SandboxWinGetSettings = @{
     }
 }
 
+# Proxy settings
+$script:Proxy = "http://localhost:57890/"
+if ($env:HTTPS_PROXY) {
+    $script:Proxy = $env:HTTPS_PROXY
+}
+elseif ($env:HTTP_PROXY) {
+    $script:Proxy = $env:HTTP_PROXY
+}
+
 ####
 # Description: Cleans up resources used by the script and then exits
 # Inputs: Exit code
@@ -146,12 +155,71 @@ function Initialize-Folder {
 }
 
 ####
+# Description: Check if user configured a credential for GitHub.
+#       This can prevent users from facing "API rate limit exceeded" error.
+# Inputs: None.
+# Outputs: Boolean. Which represents if the credential is valid.
+####
+function Test-GitHubToken {
+    # If a GitHub Token is present, check if it is valid.
+    # If it is valid, use it for the API requests
+    if ($null -ne $script:IsValidGitHubToken) {
+        # If the token has already been validated in this run, it doesn't need to be re-validated
+        # This assumes the token is not changing while the script is executing
+        return $script:IsValidGitHubToken
+    }
+
+    if (!$env:GITHUB_TOKEN) {
+        # If the environment variable doesn't exist, there is no token to validate
+        # Don't query the API at all in this case
+        $script:IsValidGitHubToken = $false
+        return $script:IsValidGitHubToken
+    }
+
+    # The rate limit for authorized users is usually much higher than 60
+    $requestParameters = @{
+        Uri            = 'https://api.github.com/rate_limit'
+        Authentication = 'Bearer'
+        Token          = $(ConvertTo-SecureString "$env:GITHUB_TOKEN" -AsPlainText)
+        Proxy          = $script:Proxy
+    }
+
+    $script:IsValidGitHubToken = (Invoke-RestMethod @requestParameters).resources.core.limit -gt 60
+    return $script:IsValidGitHubToken
+}
+
+function Get-ReleasesResponse {
+    if (Get-Command 'gh' -ErrorAction SilentlyContinue) {
+        # If the user is logged in, use the gh cli for getting the information
+        if ($(gh auth status | Out-Null; $?)) {
+            return $(gh api repos/microsoft/winget-cli/releases --paginate | ConvertFrom-Json)
+        }
+    }
+
+    # If the user is not logged in the API will be queried directly
+    $requestParameters = @{
+        Uri = $script:ReleasesApiUrl
+    }
+
+    if (Test-GitHubToken) {
+        $requestParameters.Add('Authentication', 'Bearer')
+        $requestParameters.Add('Token', $(ConvertTo-SecureString "$env:GITHUB_TOKEN" -AsPlainText))
+    }
+    else {
+        # See https://docs.github.com/zh/rest/using-the-rest-api/rate-limits-for-the-rest-api?apiVersion=2022-11-28#primary-rate-limit-for-unauthenticated-users
+        Write-Host "WARNING: You may encounter 'API rate limit exceeded' error! Please consider adding `GITHUB_TOKEN` to your environment variable."
+    }
+
+    return Invoke-RestMethod @requestParameters
+}
+
+####
 # Description: Gets the details for a specific WinGet CLI release
 # Inputs: None
 # Outputs: Nullable Object containing GitHub release details
 ####
 function Get-Release {
-    $releasesAPIResponse = Invoke-RestMethod $script:ReleasesApiUrl
+    $releasesAPIResponse = Get-ReleasesResponse
     if (!$script:Prerelease) {
         $releasesAPIResponse = $releasesAPIResponse.Where({ !$_.prerelease })
     }
@@ -177,7 +245,7 @@ function Get-RemoteContent {
     )
     Write-Debug "Attempting to fetch content from $URL"
     # Check if the URL is valid before trying to download
-    $response = [String]::IsNullOrWhiteSpace($URL) ? @{StatusCode = 400 } : $(Invoke-WebRequest -Uri $URL -Method Head -ErrorAction SilentlyContinue) # If the URL is null, return a status code of 400
+    $response = [String]::IsNullOrWhiteSpace($URL) ? @{StatusCode = 400 } : $(Invoke-WebRequest -Proxy $script:Proxy -Uri $URL -Method Head -ErrorAction SilentlyContinue) # If the URL is null, return a status code of 400
     if ($response.StatusCode -ne 200) {
         Write-Debug "Fetching remote content from $URL returned status code $($response.StatusCode)"
         return $null
