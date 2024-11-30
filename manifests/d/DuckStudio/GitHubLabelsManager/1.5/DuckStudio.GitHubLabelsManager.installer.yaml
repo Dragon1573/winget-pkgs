@@ -1,4 +1,4 @@
-# Created with komac v2.6.0
+# Created with YamlCreate.ps1 v2.4.1 $debug=NVS1.CRLF.5-1-22621-3958.Win32NT
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.6.0.schema.json
 
 PackageIdentifier: DuckStudio.GitHubLabelsManager
@@ -9,72 +9,48 @@ InstallModes:
 - silent
 - silentWithProgress
 UpgradeBehavior: install
-ReleaseDate: 2024-11-29
-ElevationRequirement: elevatesSelf
+Commands:
+- glm
+Protocols:
+- http
+- https
+FileExtensions:
+- json
+ReleaseDate: 2024-11-16
 Installers:
-- Architecture: x86
-  InstallerLocale: en-US
-  InstallerUrl: https://github.com/DuckDuckStudio/GitHub-Labels-Manager/releases/download/v1.5/GitHub_Labels_Manager_Setup_v1.5-EN.exe
-  InstallerSha256: 6C2DB11E4A0F18E306168BC1D0A2B98B6A9BC6E5E47F8AF5485EA9AAD949A71B
-  ProductCode: GitHub Labels Manager_is1
-  AppsAndFeaturesEntries:
-  - Publisher: DuckStudio
-    ProductCode: GitHub Labels Manager_is1
-- Architecture: x64
-  InstallerLocale: en-US
-  InstallerUrl: https://github.com/DuckDuckStudio/GitHub-Labels-Manager/releases/download/v1.5/GitHub_Labels_Manager_Setup_v1.5-EN.exe
-  InstallerSha256: 6C2DB11E4A0F18E306168BC1D0A2B98B6A9BC6E5E47F8AF5485EA9AAD949A71B
-  ProductCode: GitHub Labels Manager_is1
-  AppsAndFeaturesEntries:
-  - Publisher: DuckStudio
-    ProductCode: GitHub Labels Manager_is1
-- Architecture: arm
-  InstallerLocale: en-US
-  InstallerUrl: https://github.com/DuckDuckStudio/GitHub-Labels-Manager/releases/download/v1.5/GitHub_Labels_Manager_Setup_v1.5-EN.exe
-  InstallerSha256: 6C2DB11E4A0F18E306168BC1D0A2B98B6A9BC6E5E47F8AF5485EA9AAD949A71B
-  ProductCode: GitHub Labels Manager_is1
-  AppsAndFeaturesEntries:
-  - Publisher: DuckStudio
-    ProductCode: GitHub Labels Manager_is1
-- Architecture: arm64
-  InstallerLocale: en-US
-  InstallerUrl: https://github.com/DuckDuckStudio/GitHub-Labels-Manager/releases/download/v1.5/GitHub_Labels_Manager_Setup_v1.5-EN.exe
-  InstallerSha256: 6C2DB11E4A0F18E306168BC1D0A2B98B6A9BC6E5E47F8AF5485EA9AAD949A71B
-  ProductCode: GitHub Labels Manager_is1
-  AppsAndFeaturesEntries:
-  - Publisher: DuckStudio
-    ProductCode: GitHub Labels Manager_is1
-- Architecture: x86
-  InstallerLocale: zh-CN
+- InstallerLocale: zh-CN
+  Architecture: x64
   InstallerUrl: https://github.com/DuckDuckStudio/GitHub-Labels-Manager/releases/download/v1.5/GitHub_Labels_Manager_Setup_v1.5.exe
   InstallerSha256: A8320591B38E7CB67C04639BC7B736F90FDCDFF395D862168465C9053F6FB289
-  ProductCode: GitHub 标签管理器_is1
-  AppsAndFeaturesEntries:
-  - Publisher: DuckStudio
-    ProductCode: GitHub 标签管理器_is1
-- Architecture: x64
-  InstallerLocale: zh-CN
+- InstallerLocale: zh-CN
+  Architecture: x86
   InstallerUrl: https://github.com/DuckDuckStudio/GitHub-Labels-Manager/releases/download/v1.5/GitHub_Labels_Manager_Setup_v1.5.exe
   InstallerSha256: A8320591B38E7CB67C04639BC7B736F90FDCDFF395D862168465C9053F6FB289
-  ProductCode: GitHub 标签管理器_is1
-  AppsAndFeaturesEntries:
-  - Publisher: DuckStudio
-    ProductCode: GitHub 标签管理器_is1
-- Architecture: arm
-  InstallerLocale: zh-CN
+- InstallerLocale: zh-CN
+  Architecture: arm
   InstallerUrl: https://github.com/DuckDuckStudio/GitHub-Labels-Manager/releases/download/v1.5/GitHub_Labels_Manager_Setup_v1.5.exe
   InstallerSha256: A8320591B38E7CB67C04639BC7B736F90FDCDFF395D862168465C9053F6FB289
-  ProductCode: GitHub 标签管理器_is1
-  AppsAndFeaturesEntries:
-  - Publisher: DuckStudio
-    ProductCode: GitHub 标签管理器_is1
-- Architecture: arm64
-  InstallerLocale: zh-CN
+- InstallerLocale: zh-CN
+  Architecture: arm64
   InstallerUrl: https://github.com/DuckDuckStudio/GitHub-Labels-Manager/releases/download/v1.5/GitHub_Labels_Manager_Setup_v1.5.exe
   InstallerSha256: A8320591B38E7CB67C04639BC7B736F90FDCDFF395D862168465C9053F6FB289
-  ProductCode: GitHub 标签管理器_is1
-  AppsAndFeaturesEntries:
-  - Publisher: DuckStudio
-    ProductCode: GitHub 标签管理器_is1
+
+- InstallerLocale: en-US
+  Architecture: x64
+  InstallerUrl: https://github.com/DuckDuckStudio/GitHub-Labels-Manager/releases/download/v1.5/GitHub_Labels_Manager_Setup_v1.5-EN.exe
+  InstallerSha256: 6C2DB11E4A0F18E306168BC1D0A2B98B6A9BC6E5E47F8AF5485EA9AAD949A71B
+- InstallerLocale: en-US
+  Architecture: x86
+  InstallerUrl: https://github.com/DuckDuckStudio/GitHub-Labels-Manager/releases/download/v1.5/GitHub_Labels_Manager_Setup_v1.5-EN.exe
+  InstallerSha256: 6C2DB11E4A0F18E306168BC1D0A2B98B6A9BC6E5E47F8AF5485EA9AAD949A71B
+- InstallerLocale: en-US
+  Architecture: arm
+  InstallerUrl: https://github.com/DuckDuckStudio/GitHub-Labels-Manager/releases/download/v1.5/GitHub_Labels_Manager_Setup_v1.5-EN.exe
+  InstallerSha256: 6C2DB11E4A0F18E306168BC1D0A2B98B6A9BC6E5E47F8AF5485EA9AAD949A71B
+- InstallerLocale: en-US
+  Architecture: arm64
+  InstallerUrl: https://github.com/DuckDuckStudio/GitHub-Labels-Manager/releases/download/v1.5/GitHub_Labels_Manager_Setup_v1.5-EN.exe
+  InstallerSha256: 6C2DB11E4A0F18E306168BC1D0A2B98B6A9BC6E5E47F8AF5485EA9AAD949A71B
+
 ManifestType: installer
 ManifestVersion: 1.6.0

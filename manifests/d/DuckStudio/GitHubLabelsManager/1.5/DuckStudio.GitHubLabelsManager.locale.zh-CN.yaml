@@ -1,23 +1,50 @@
-# Created with komac v2.6.0
+# Created with YamlCreate.ps1 v2.4.1 $debug=NVS1.CRLF.5-1-22621-3958.Win32NT
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
 
 PackageIdentifier: DuckStudio.GitHubLabelsManager
 PackageVersion: '1.5'
 PackageLocale: zh-CN
 Publisher: DuckStudio
-PublisherUrl: https://github.com/DuckDuckStudio
+PublisherUrl: https://duckduckstudio.github.io/yazicbs.github.io/
 PublisherSupportUrl: https://github.com/DuckDuckStudio/GitHub-Labels-Manager/issues
+# PrivacyUrl:
 Author: 鸭鸭「カモ」
-PackageName: GitHub 标签管理器
+PackageName: GitHub Labels Manager
 PackageUrl: https://github.com/DuckDuckStudio/GitHub-Labels-Manager
-License: GPL-3.0 with CN Software Copyright registered
+License: GNU General Public License v3.0
 LicenseUrl: https://github.com/DuckDuckStudio/GitHub-Labels-Manager/blob/main/LICENSE
-Copyright: Copyright (c) 鸭鸭「カモ」
-ShortDescription: 自动帮你复制仓库标签、获取仓库标签、清空已有标签的工具
+Copyright: Copyright (c) DuckStudio 鸭鸭「カモ」
+CopyrightUrl: https://github.com/DuckDuckStudio/GitHub-Labels-Manager/blob/main/LICENSE
+ShortDescription: GitHub仓库标签管理工具
+Description: 自动帮你复制仓库标签、获取仓库标签、清空已有标签的工具
+Moniker: glm
 Tags:
-- devtools
-- github-labels
-- labels
+- 开发工具
+- github
+- github标签
+- 标签
+- 管理器
+ReleaseNotes: |
+  *感谢所有为本版本做出贡献的人!  
+  > @DuckDuckStudio
+
+  > [!NOTE]
+  > 本版本由[自动流](https://github.com/DuckDuckStudio/GitHub-Labels-Manager/actions/runs/12078168910)构建，经重命名后发布。
+
+  > [!TIP]
+  > 本版本为修复 (Fix)
+
+  ## 修复 (Fix)
+  - [x] fix: 修正 422 与 401 错误返回
+
+  ---
+
+  **Full Changelog**: https://github.com/DuckDuckStudio/GitHub-Labels-Manager/compare/v1.4...v1.5
 ReleaseNotesUrl: https://github.com/DuckDuckStudio/GitHub-Labels-Manager/releases/tag/v1.5
+# PurchaseUrl:
+# InstallationNotes:
+Documentations: 
+- DocumentLabel: README
+  DocumentUrl: https://github.com/DuckDuckStudio/GitHub-Labels-Manager/blob/main/README.md
 ManifestType: defaultLocale
 ManifestVersion: 1.6.0
