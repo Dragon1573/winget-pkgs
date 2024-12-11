@@ -1,0 +1,24 @@
+# Created with komac v2.8.0
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.9.0.schema.json
+
+PackageIdentifier: ghdl.ghdl.mingw32
+PackageVersion: 4.1.0
+InstallerType: zip
+NestedInstallerType: portable
+NestedInstallerFiles:
+- RelativeFilePath: GHDL/bin/ghdl.exe
+  PortableCommandAlias: ghdl
+InstallModes:
+- interactive
+- silent
+- silentWithProgress
+UpgradeBehavior: uninstallPrevious
+Commands:
+- ghdl
+ReleaseDate: 2024-04-14
+Installers:
+- Architecture: x86
+  InstallerUrl: https://github.com/ghdl/ghdl/releases/download/v4.1.0/ghdl-MINGW32.zip
+  InstallerSha256: 66288FC2F6DFE6510357406EC7AED3A67B9AE1DEEAF2FE488C8E99E5DAE768CF
+ManifestType: installer
+ManifestVersion: 1.9.0
