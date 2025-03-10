@@ -1,0 +1,17 @@
+repos:
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v5.0.0
+  hooks:
+  - id: check-yaml
+    name: 'Check YAML Syntax'
+  - id: end-of-file-fixer
+    name: 'Fix End of Files'
+  - id: trailing-whitespace
+    name: 'Trim Trailing Whitespace'
+- repo: local
+  hooks:
+  - id: prevent-alist
+    name: 'Prevent Local File Server'
+    language: pygrep
+    entry: 'http(s?)://alist\.dragon1573\.(local|wang)'
+    files: 'manifests/.*'
