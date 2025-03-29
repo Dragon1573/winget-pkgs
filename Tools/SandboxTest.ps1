@@ -36,7 +36,8 @@ Param(
     [switch] $SkipManifestValidation,
     [switch] $Prerelease,
     [switch] $EnableExperimentalFeatures,
-    [switch] $Clean
+    [switch] $Clean,
+    [string] $Proxy = $null
 )
 
 enum DependencySources {
@@ -100,6 +101,16 @@ $script:HostGeoID = (Get-WinHomeLocation).GeoID
 Add-Type -AssemblyName System.Net.Http
 $script:HttpClient = New-Object System.Net.Http.HttpClient
 $script:CleanupPaths = @()
+
+# Network behavior
+if (!$Proxy) {
+    # Try inspect the system-level proxy settings by visiting GitHub RESTful API Endpoint and extract proxy settings from it.
+    # This is a bit of a hack, but it works for most cases.
+    Write-Verbose 'No Proxy specified! Trying to get the system-level proxy settings.'
+    $proxyInfo = [System.Net.WebRequest]::GetSystemWebProxy().GetProxy('https://api.github.com/')
+    $Proxy = $proxyInfo.Scheme + "://" + $proxyInfo.Host + ':' + $proxyInfo.Port
+}
+Write-Information "Using Proxy: $Proxy"
 
 # Removed the `-GitHubToken`parameter, always use environment variable
 # It is possible that the environment variable may not exist, in which case this may be null
@@ -165,7 +176,7 @@ function Initialize-Folder {
 ####
 function Get-Release {
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingConvertToSecureStringWithPlainText', '',
-        Justification='The standard workflow that users use with other applications requires the use of plaintext GitHub Access Tokens')]
+        Justification = 'The standard workflow that users use with other applications requires the use of plaintext GitHub Access Tokens')]
 
     param (
         [Parameter()]
@@ -193,7 +204,7 @@ Please consider adding your token using the `WINGET_PKGS_GITHUB_TOKEN` environme
 "@
     }
 
-    $releasesAPIResponse = Invoke-RestMethod @requestParameters
+    $releasesAPIResponse = Invoke-RestMethod -Proxy $Proxy @requestParameters
     if (!$script:Prerelease) {
         $releasesAPIResponse = $releasesAPIResponse.Where({ !$_.prerelease })
     }
@@ -347,7 +358,7 @@ function Test-FileChecksum {
 ####
 function Test-GithubToken {
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingConvertToSecureStringWithPlainText', '',
-        Justification='The standard workflow that users use with other applications requires the use of plaintext GitHub Access Tokens')]
+        Justification = 'The standard workflow that users use with other applications requires the use of plaintext GitHub Access Tokens')]
 
     param (
         [Parameter(Mandatory = $true)]
@@ -443,7 +454,7 @@ function Test-GithubToken {
     }
 
     Write-Verbose "Checking Token against $($requestParameters.Uri)"
-    $apiResponse = Invoke-WebRequest @requestParameters # This will return an exception if the token is not valid; It is intentionally not caught
+    $apiResponse = Invoke-WebRequest -Proxy $Proxy @requestParameters # This will return an exception if the token is not valid; It is intentionally not caught
     # The headers can sometimes be a single string, or an array of strings. Cast them into an array anyways just for safety
     $rateLimit = @($apiResponse.Headers['X-RateLimit-Limit'])
     $tokenExpiration = @($apiResponse.Headers['github-authentication-token-expiration']) # This could be null if the token is set to never expire.
@@ -783,6 +794,8 @@ Write-Host @'
 '@
 winget settings --Enable LocalManifestFiles
 winget settings --Enable LocalArchiveMalwareScanOverride
+winget settings --Enable ProxyCommandLineOptions
+winget settings set DefaultProxy $Proxy
 Get-ChildItem -Filter 'settings.json' | Copy-Item -Destination C:\Users\WDAGUtilityAccount\AppData\Local\Packages\Microsoft.DesktopAppInstaller_8wekyb3d8bbwe\LocalState\settings.json
 Set-WinHomeLocation -GeoID $($script:HostGeoID)
 
