@@ -838,7 +838,7 @@ if (`$manifestFolder) {
 
 --> Comparing ARP Entries
 '@
-    (Compare-Object (Get-ARPTable) `$originalARP -Property DisplayName,DisplayVersion,Publisher,ProductCode,Scope)| Select-Object -Property * -ExcludeProperty SideIndicator | Format-Table
+    (Compare-Object (Get-ARPTable) `$originalARP -Property DisplayName,DisplayVersion,Publisher,ProductCode,Scope)| Select-Object -Property * -ExcludeProperty SideIndicator | Format-List
 }
 
 `$BoundParameterScript = Get-ChildItem -Filter 'BoundParameterScript.ps1'
