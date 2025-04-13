@@ -44,6 +44,7 @@ Param
   [string] $Proxy = $null
 )
 $ProgressPreference = 'SilentlyContinue'
+$InformationPreference = 'Continue'
 
 if (!$Proxy) {
   # Try inspect the system-level proxy settings by visiting GitHub RESTful API Endpoint and extract proxy settings from it.
