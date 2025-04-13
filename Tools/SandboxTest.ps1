@@ -230,14 +230,13 @@ function Get-RemoteContent {
     )
     Write-Debug "Attempting to fetch content from $URL"
     # Check if the URL is valid before trying to download
-    # If the URL is null, return a status code of 400
+    # Check if URL is empty
     if ([String]::IsNullOrWhiteSpace($URL)) {
         $response = @{ StatusCode = 400 }
     } else {
         # Try to fetch headers from the URL
         $response = Invoke-WebRequest -Proxy $Proxy -Uri $URL -Method Head -ErrorAction SilentlyContinue
     }
-
     if ($response.StatusCode -ne 200) {
         Write-Debug "Fetching remote content from $URL returned status code $($response.StatusCode)"
         return $null
@@ -255,7 +254,6 @@ function Get-RemoteContent {
     } else {
         $script:CleanupPaths += @()
     }
-
     try {
         $downloadTask = $script:HttpClient.GetByteArrayAsync($URL)
         [System.IO.File]::WriteAllBytes($localfile.FullName, $downloadTask.Result)
