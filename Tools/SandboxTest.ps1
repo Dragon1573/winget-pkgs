@@ -49,7 +49,12 @@ enum DependencySources {
 $ProgressPreference = 'SilentlyContinue'
 $ErrorActionPreference = 'Stop' # This gets overridden most places, but is set explicitly here to help catch errors
 if ($PSBoundParameters.Keys -notcontains 'InformationAction') { $InformationPreference = 'Continue' } # If the user didn't explicitly set an InformationAction, Override their preference
-$script:OnMappedFolderWarning = ($PSBoundParameters.Keys -contains 'WarningAction') ? $PSBoundParameters.WarningAction : 'Inquire'
+if ($PSBoundParameters.Keys -contains 'WarningAction') {
+    $script:OnMappedFolderWarning = $PSBoundParameters.WarningAction
+}
+else {
+    $script:OnMappedFolderWarning = 'Inquire'
+}
 $script:UseNuGetForMicrosoftUIXaml = $false
 $script:ScriptName = 'SandboxTest'
 $script:AppInstallerPFN = 'Microsoft.DesktopAppInstaller_8wekyb3d8bbwe'
@@ -223,14 +228,34 @@ function Get-RemoteContent {
     )
     Write-Debug "Attempting to fetch content from $URL"
     # Check if the URL is valid before trying to download
-    $response = [String]::IsNullOrWhiteSpace($URL) ? @{StatusCode = 400 } : $(Invoke-WebRequest -Proxy $Proxy -Uri $URL -Method Head -ErrorAction SilentlyContinue) # If the URL is null, return a status code of 400
+    # Check if URL is empty
+    if ([String]::IsNullOrWhiteSpace($URL)) {
+        $response = @{StatusCode = 400 }
+    }
+    else {
+        # Try to fetch headers from the URL
+        $response = Invoke-WebRequest -Proxy $Proxy -Uri $URL -Method Head -ErrorAction SilentlyContinue
+    }
+
     if ($response.StatusCode -ne 200) {
         Write-Debug "Fetching remote content from $URL returned status code $($response.StatusCode)"
         return $null
     }
-    $localFile = $OutputPath ? [System.IO.FileInfo]::new($OutputPath) : $(New-TemporaryFile) # If a path was specified, store it at that path; Otherwise use the temp folder
+    # If a path was specified, store it at that path; Otherwise use the temp folder
+    if ($OutputPath) {
+        $localFile = [System.IO.FileInfo]::new($OutputPath)
+    }
+    else {
+        $localFile = New-TemporaryFile
+    }
     Write-Debug "Remote content will be stored at $($localFile.FullName)"
-    $script:CleanupPaths += $Raw ? @($localFile.FullName) : @() # Mark the file for cleanup when the script ends if the raw data was requested
+    # Mark the file for cleanup when the script ends if the raw data was requested
+    if ($Raw) {
+        $script:CleanupPaths += @($localFile.FullName)
+    } else {
+        $script:CleanupPaths += @()
+    }
+
     try {
         $downloadTask = $script:HttpClient.GetByteArrayAsync($URL)
         [System.IO.File]::WriteAllBytes($localfile.FullName, $downloadTask.Result)
@@ -239,7 +264,12 @@ function Get-RemoteContent {
         # If the download fails, write a zero-byte file anyways
         $null | Out-File $localFile.FullName
     }
-    return $Raw ? $(Get-Content -Path $localFile.FullName) : $localFile # If the raw content was requested, return the content, otherwise, return the FileInfo object
+    # If the raw content was requested, return the content, otherwise, return the FileInfo object
+    if ($Raw) {
+        return Get-Content -Path $localFile.FullName
+    } else {
+        return $localFile
+    }
 }
 
 ####
