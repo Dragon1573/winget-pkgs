@@ -94,6 +94,12 @@ $script:SandboxWorkingDirectory = Join-Path -Path $script:SandboxDesktopFolder -
 $script:SandboxTestDataFolder = Join-Path -Path $script:SandboxDesktopFolder -ChildPath $($script:TestDataFolder | Split-Path -Leaf)
 $script:SandboxBootstrapFile = Join-Path -Path $script:SandboxTestDataFolder -ChildPath "$script:ScriptName.ps1"
 $script:HostGeoID = (Get-WinHomeLocation).GeoID
+# Use quater of the physical memory size for the sandbox, for increasing performance.
+$script:PrefferMemorySize = ((Get-WmiObject Win32_PhysicalMemory).Capacity | Measure-Object Capacity -Sum).Sum / (1MB) / 4
+if ($script:PrefferMemorySize -le 2048) {
+    # Physical memory is TOO small! Set the minimum to 2GB.
+    $script:PrefferMemorySize = 2048 # Minimum of 2GB
+}
 
 # Misc
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -252,7 +258,8 @@ function Get-RemoteContent {
     # Mark the file for cleanup when the script ends if the raw data was requested
     if ($Raw) {
         $script:CleanupPaths += @($localFile.FullName)
-    } else {
+    }
+    else {
         $script:CleanupPaths += @()
     }
 
@@ -267,7 +274,8 @@ function Get-RemoteContent {
     # If the raw content was requested, return the content, otherwise, return the FileInfo object
     if ($Raw) {
         return Get-Content -Path $localFile.FullName
-    } else {
+    }
+    else {
         return $localFile
     }
 }
@@ -474,16 +482,17 @@ function Test-GithubToken {
     Write-Verbose 'Token validated successfully. Adding to cache'
     # Trim off any non-digit characters from the end
     # Strip off the array wrapper since it is no longer needed
-    $tokenExpiration = $tokenExpiration[0] -replace '[^0-9]+$',''
+    $tokenExpiration = $tokenExpiration[0] -replace '[^0-9]+$', ''
     # If the token doesn't expire, write a special value to the file
     if (!$tokenExpiration -or [string]::IsNullOrWhiteSpace($tokenExpiration)) {
         Write-Debug "Token expiration was empty, setting it to maximum"
         $tokenExpiration = [System.DateTime]::MaxValue
     }
     # Try parsing the value to a datetime before storing it
-    if ([DateTime]::TryParse($tokenExpiration,[ref]$tokenExpiration)) {
+    if ([DateTime]::TryParse($tokenExpiration, [ref]$tokenExpiration)) {
         Write-Debug "Token expiration successfully parsed as DateTime ($tokenExpiration)"
-    } else {
+    }
+    else {
         # TryParse Failed
         Write-Warning "Could not parse expiration date as a DateTime object. It will be set to the minimum value"
         $tokenExpiration = [System.DateTime]::MinValue
@@ -519,18 +528,18 @@ if (!$SkipManifestValidation -and ![String]::IsNullOrWhiteSpace($Manifest)) {
     }
     Write-Information "--> Validating Manifest"
     $validateCommandOutput =
-        & {
-            # Store current output encoding setting
-            $prevOutEnc = [Console]::OutputEncoding
-            # Set [Console]::OutputEncoding to UTF-8 since winget uses UTF-8 for output
-            [Console]::OutputEncoding = $OutputEncoding = [System.Text.Utf8Encoding]::new()
+    & {
+        # Store current output encoding setting
+        $prevOutEnc = [Console]::OutputEncoding
+        # Set [Console]::OutputEncoding to UTF-8 since winget uses UTF-8 for output
+        [Console]::OutputEncoding = $OutputEncoding = [System.Text.Utf8Encoding]::new()
 
-            winget.exe validate $Manifest
+        winget.exe validate $Manifest
 
-            # Reset the encoding to the previous values
-            [Console]::OutputEncoding = $prevOutEnc
-        }
-        switch ($LASTEXITCODE) {
+        # Reset the encoding to the previous values
+        [Console]::OutputEncoding = $prevOutEnc
+    }
+    switch ($LASTEXITCODE) {
         '-1978335191' {
             ($validateCommandOutput | Select-Object -Skip 1 -SkipLast 1) | Write-Information # Skip the first line and the empty last line
             Write-Error -Category ParserError 'Manifest validation failed' -ErrorAction Continue
@@ -850,8 +859,9 @@ Write-Verbose 'Creating WSB file for launching the sandbox'
     </MappedFolder>
   </MappedFolders>
   <LogonCommand>
-  <Command>PowerShell Start-Process PowerShell -WindowStyle Maximized -WorkingDirectory '$($script:SandboxWorkingDirectory)' -ArgumentList '-ExecutionPolicy Bypass -NoExit -NoLogo -File $($script:SandboxBootstrapFile)'</Command>
+    <Command>PowerShell Start-Process PowerShell -WindowStyle Maximized -WorkingDirectory '$($script:SandboxWorkingDirectory)' -ArgumentList '-ExecutionPolicy Bypass -NoExit -NoLogo -File $($script:SandboxBootstrapFile)'</Command>
   </LogonCommand>
+  <memoryInMB>$script:PrefferMemorySize</memoryInMB>
 </Configuration>
 "@ | Out-File -FilePath $script:ConfigurationFile
 
