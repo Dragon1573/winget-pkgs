@@ -1,0 +1,36 @@
+name: Inspect Package Installer File
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: Package installer URL
+        required: true
+        type: string
+      extension:
+        description: File extension of installer
+        required: true
+        type: choice
+        default: exe
+        options:
+        - exe
+        - msi
+        - msix
+        - zip
+        - appx
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Download the installer file
+      shell: bash
+      run: wget -v -O "installer.${{ inputs.extension }}" "${{ inputs.url }}"
+    - name: Inspect with Komac
+      uses: michidk/run-komac@v2.1.0
+      with:
+        args: 'analyse --hash "./installer.${{ inputs.extension }}"'
+        custom-tool: WinGet-Subscriber
+        custom-tool-url: https://github.com/Dragon1573/winget-pkgs/tree/bot
+    - name: Extract ZIP Archive
+      shell: bash
+      if: inputs.extension == 'zip'
+      run: unzip -l "./installer.${{ inputs.extension }}"
