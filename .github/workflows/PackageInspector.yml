@@ -28,6 +28,7 @@ jobs:
       uses: michidk/run-komac@v2.1.0
       with:
         args: 'analyse --hash "./installer.${{ inputs.extension }}"'
+        custom-fork-owner: Dragon1573
         custom-tool: WinGet-Subscriber
         custom-tool-url: https://github.com/Dragon1573/winget-pkgs/tree/bot
     - name: Extract ZIP Archive
