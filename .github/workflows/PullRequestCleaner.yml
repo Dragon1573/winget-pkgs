@@ -1,0 +1,27 @@
+name: Cleanup Merged Pull Requests
+on:
+  schedule:
+    - cron: 0 0/3 * * *
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    name: Branch Cleanup
+    concurrency: komac-cleanup
+    runs-on: ubuntu-latest
+    steps:
+    - name: Configure Git
+      shell: bash
+      run: |
+        # This HAVE TO configure as myself.
+        git config --global user.name Dragon1573
+        git config --global user.email 49941141+Dragon1573@noreply.users.github.com
+    - name: Remove merged pull requests
+      uses: michidk/run-komac@v2.1.0
+      with:
+        args: 'clean -a -t ${{ secrets.GITHUB_TOKEN }}'
+        custom-tool: WinGet-Subscriber
+        custom-tool-url: https://github.com/Dragon1573/winget-pkgs/tree/bot
