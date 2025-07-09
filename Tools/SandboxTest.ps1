@@ -50,7 +50,8 @@ $ErrorActionPreference = 'Stop' # This gets overridden most places, but is set e
 if ($PSBoundParameters.Keys -notcontains 'InformationAction') { $InformationPreference = 'Continue' } # If the user didn't explicitly set an InformationAction, Override their preference
 if ($PSBoundParameters.Keys -contains 'WarningAction') {
     $script:OnMappedFolderWarning = $PSBoundParameters.WarningAction
-} else {
+}
+else {
     $script:OnMappedFolderWarning = 'Inquire'
 }
 $script:UseNuGetForMicrosoftUIXaml = $false
@@ -92,6 +93,12 @@ $script:SandboxWorkingDirectory = Join-Path -Path $script:SandboxDesktopFolder -
 $script:SandboxTestDataFolder = Join-Path -Path $script:SandboxDesktopFolder -ChildPath $($script:TestDataFolder | Split-Path -Leaf)
 $script:SandboxBootstrapFile = Join-Path -Path $script:SandboxTestDataFolder -ChildPath "$script:ScriptName.ps1"
 $script:HostGeoID = (Get-WinHomeLocation).GeoID
+# Use quater of the physical memory size for the sandbox, for increasing performance.
+$script:PrefferMemorySize = ([System.GC]::GetGCMemoryInfo().TotalAvailableMemoryBytes) / (1MB) / 4
+if ($script:PrefferMemorySize -le 2048) {
+    # Physical memory is TOO small! Set the minimum to 2GB.
+    $script:PrefferMemorySize = 2048 # Minimum of 2GB
+}
 
 # Misc
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -183,7 +190,8 @@ function Get-Release {
         Write-Verbose 'Adding Bearer Token Authentication to Releases API Request'
         $requestParameters.Add('Authentication', 'Bearer')
         $requestParameters.Add('Token', $(ConvertTo-SecureString $GitHubToken -AsPlainText))
-    } else {
+    }
+    else {
         # No token was provided or the token has expired
         # If an invalid token was provided, an exception will have been thrown before this code is reached
         Write-Warning @"
@@ -221,7 +229,8 @@ function Get-RemoteContent {
     # If the URL is null, return a status code of 400
     if ([String]::IsNullOrWhiteSpace($URL)) {
         $response = @{ StatusCode = 400 }
-    } else {
+    }
+    else {
         $response = Invoke-WebRequest -Uri $URL -Method Head -ErrorAction SilentlyContinue
     }
     if ($response.StatusCode -ne 200) {
@@ -231,7 +240,8 @@ function Get-RemoteContent {
     # If a path was specified, store it at that path; Otherwise use the temp folder
     if ($OutputPath) {
         $localFile = [System.IO.FileInfo]::new($OutputPath)
-    } else {
+    }
+    else {
         $localFile = New-TemporaryFile
     }
     Write-Debug "Remote content will be stored at $($localFile.FullName)"
@@ -242,14 +252,16 @@ function Get-RemoteContent {
     try {
         $downloadTask = $script:HttpClient.GetByteArrayAsync($URL)
         [System.IO.File]::WriteAllBytes($localfile.FullName, $downloadTask.Result)
-    } catch {
+    }
+    catch {
         # If the download fails, write a zero-byte file anyways
         $null | Out-File $localFile.FullName
     }
     # If the raw content was requested, return the content, otherwise, return the FileInfo object
     if ($Raw) {
         return Get-Content -Path $localFile.FullName
-    } else {
+    }
+    else {
         return $localFile
     }
 }
@@ -414,18 +426,21 @@ function Test-GithubToken {
                 Write-Verbose 'The cached token contained content, but it could not be parsed as a date. It will be re-validated'
                 Invoke-FileCleanup -FilePaths $cachedToken.FullName
                 # Do not return anything, since the token will need to be re-validated
-            } else {
+            }
+            else {
                 Write-Verbose "The cached token contained content, but the token expired $([Math]::Abs($tokenExpirationDays)) days ago"
                 # Leave the cached token so that it doesn't throw script exceptions in the future
                 # Invoke-FileCleanup -FilePaths $cachedToken.FullName
                 return $false
             }
-        } else {
+        }
+        else {
             # Either the token was empty, or the cached token is expired. Remove the cached token so that re-validation
             # of the token will update the date the token was cached if it is still valid
             Invoke-FileCleanup -FilePaths $cachedToken.FullName
         }
-    } else {
+    }
+    else {
         Write-Verbose 'Token was not found in the cache'
     }
 
@@ -462,7 +477,8 @@ function Test-GithubToken {
     # Try parsing the value to a datetime before storing it
     if ([DateTime]::TryParse($tokenExpiration, [ref]$tokenExpiration)) {
         Write-Debug "Token expiration successfully parsed as DateTime ($tokenExpiration)"
-    } else {
+    }
+    else {
         # TryParse Failed
         Write-Warning 'Could not parse expiration date as a DateTime object. It will be set to the minimum value'
         $tokenExpiration = [System.DateTime]::MinValue
@@ -594,7 +610,8 @@ if ($script:AppInstallerParsedVersion -ge [System.Version]'1.9.25180') {
         Algorithm   = 'SHA256'
         SaveTo      = (Join-Path -Path $script:AppInstallerReleaseAssetsFolder -ChildPath $script:DependenciesZipFileName)
     }
-} else {
+}
+else {
     $script:DependencySource = [DependencySources]::Legacy
     # Add the VCLibs to the dependencies
     Write-Debug 'Adding VCLibs UWP to dependency list'
@@ -624,7 +641,8 @@ if ($script:AppInstallerParsedVersion -ge [System.Version]'1.9.25180') {
             Algorithm   = 'SHA256'
             SaveTo      = (Join-Path -Path $script:DependenciesCacheFolder -ChildPath 'Microsoft.UI.Xaml.2.7.x64.appx')
         }
-    } else {
+    }
+    else {
         # Add Xaml 2.8 to the dependencies
         Write-Debug 'Adding Microsoft.UI.Xaml (v2.8) to dependency list'
         $script:AppInstallerDependencies += @{
@@ -876,9 +894,14 @@ Write-Verbose 'Creating WSB file for launching the sandbox'
   <LogonCommand>
   <Command>PowerShell Start-Process PowerShell -WindowStyle Maximized -WorkingDirectory '$($script:SandboxWorkingDirectory)' -ArgumentList '-ExecutionPolicy Bypass -NoExit -NoLogo -File $($script:SandboxBootstrapFile)'</Command>
   </LogonCommand>
+  <memoryInMB>$script:PrefferMemorySize</memoryInMB>
   <AudioInput>Disable</AudioInput>
   <VideoInput>Disable</VideoInput>
   <PrinterRedirection>Disable</PrinterRedirection>
+  <AudioInput>Disable</AudioInput>
+  <VideoInput>Disable</VideoInput>
+  <PrinterRedirection>Disable</PrinterRedirection>
+  <memoryInMB>$script:PrefferMemorySize</memoryInMB>
 </Configuration>
 "@ | Out-File -FilePath $script:ConfigurationFile
 
