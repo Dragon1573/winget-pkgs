@@ -2,5 +2,7 @@
   "[powershell]": {
     "files.encoding": "utf8bom",
     "files.autoGuessEncoding": true
-  }
+  },
+  "powershell.codeFormatting.newLineAfterCloseBrace": true,
+  "Lingma.PreferredLanguage forCommitMessage": "English"
 }
