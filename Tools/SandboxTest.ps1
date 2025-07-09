@@ -130,6 +130,12 @@ $script:SandboxWorkingDirectory = Join-Path -Path $script:SandboxDesktopFolder -
 $script:SandboxTestDataFolder = Join-Path -Path $script:SandboxDesktopFolder -ChildPath $($script:TestDataFolder | Split-Path -Leaf)
 $script:SandboxBootstrapFile = Join-Path -Path $script:SandboxTestDataFolder -ChildPath "$script:ScriptName.ps1"
 $script:HostGeoID = (Get-WinHomeLocation).GeoID
+# Use quater of the physical memory size for the sandbox, for increasing performance.
+$script:PrefferMemorySize = ([System.GC]::GetGCMemoryInfo().TotalAvailableMemoryBytes) / (1MB) / 4
+if ($script:PrefferMemorySize -le 2048) {
+    # Physical memory is TOO small! Set the minimum to 2GB.
+    $script:PrefferMemorySize = 2048 # Minimum of 2GB
+}
 
 # Misc
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -305,6 +311,9 @@ function Get-RemoteContent {
     # Mark the file for cleanup when the script ends if the raw data was requested
     if ($Raw) {
         $script:CleanupPaths += @($localFile.FullName)
+    }
+    else {
+        $script:CleanupPaths += @()
     }
     try {
         $downloadTask = $script:HttpClient.GetByteArrayAsync($URL)
@@ -822,6 +831,14 @@ function Get-ARPTable {
         Select-Object DisplayName, DisplayVersion, Publisher, @{N='ProductCode'; E={`$_.PSChildName}}, @{N='Scope'; E={if(`$_.PSDrive.Name -eq 'HKCU') {'User'} else {'Machine'}}}
 }
 
+function Compare-ARPTable {
+    param (
+        [Parameter(Mandatory = `$true)] `$After,
+        [Parameter(Mandatory = `$true)] `$Before
+    )
+    (Compare-Object `$After `$Before -Property DisplayName,DisplayVersion,Publisher,ProductCode,Scope) |Select-Object -Property * -ExcludeProperty SideIndicator | Format-List
+}
+
 "@ | Out-File -FilePath $(Join-Path -Path $script:TestDataFolder -ChildPath "$script:ScriptName.ps1")
 
 if ($Proxy) {
@@ -959,7 +976,7 @@ if (`$manifestFolder) {
 
 --> Comparing ARP Entries
 '@
-    (Compare-Object (Get-ARPTable) `$originalARP -Property DisplayName,DisplayVersion,Publisher,ProductCode,Scope)| Select-Object -Property * -ExcludeProperty SideIndicator | Format-Table
+    Compare-ARPTable -After (Get-ARPTable) -Before `$originalARP
 }
 
 `$BoundParameterScript = Get-ChildItem -Filter 'BoundParameterScript.ps1'
@@ -998,9 +1015,14 @@ $escapedSandboxBootstrapFile = [System.Security.SecurityElement]::Escape($script
   <LogonCommand>
   <Command>PowerShell Start-Process PowerShell -WindowStyle Maximized -WorkingDirectory '$($escapedSandboxWorkingDirectory)' -ArgumentList '-ExecutionPolicy Bypass -NoExit -NoLogo -File $($escapedSandboxBootstrapFile)'</Command>
   </LogonCommand>
+  <memoryInMB>$script:PrefferMemorySize</memoryInMB>
   <AudioInput>Disable</AudioInput>
   <VideoInput>Disable</VideoInput>
   <PrinterRedirection>Disable</PrinterRedirection>
+  <AudioInput>Disable</AudioInput>
+  <VideoInput>Disable</VideoInput>
+  <PrinterRedirection>Disable</PrinterRedirection>
+  <memoryInMB>$script:PrefferMemorySize</memoryInMB>
 </Configuration>
 "@ | Out-File -FilePath $script:ConfigurationFile
 
