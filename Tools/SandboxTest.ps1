@@ -50,7 +50,8 @@ $ErrorActionPreference = 'Stop' # This gets overridden most places, but is set e
 if ($PSBoundParameters.Keys -notcontains 'InformationAction') { $InformationPreference = 'Continue' } # If the user didn't explicitly set an InformationAction, Override their preference
 if ($PSBoundParameters.Keys -contains 'WarningAction') {
     $script:OnMappedFolderWarning = $PSBoundParameters.WarningAction
-} else {
+}
+else {
     $script:OnMappedFolderWarning = 'Inquire'
 }
 $script:UseNuGetForMicrosoftUIXaml = $false
@@ -227,7 +228,8 @@ function Get-RemoteContent {
     # If the URL is null, return a status code of 400
     if ([String]::IsNullOrWhiteSpace($URL)) {
         $response = @{ StatusCode = 400 }
-    } else {
+    }
+    else {
         $response = Invoke-WebRequest -Uri $URL -Method Head -ErrorAction SilentlyContinue
     }
     if ($response.StatusCode -ne 200) {
@@ -237,13 +239,17 @@ function Get-RemoteContent {
     # If a path was specified, store it at that path; Otherwise use the temp folder
     if ($OutputPath) {
         $localFile = [System.IO.FileInfo]::new($OutputPath)
-    } else {
+    }
+    else {
         $localFile = New-TemporaryFile
     }
     Write-Debug "Remote content will be stored at $($localFile.FullName)"
     # Mark the file for cleanup when the script ends if the raw data was requested
     if ($Raw) {
         $script:CleanupPaths += @($localFile.FullName)
+    }
+    else {
+        $script:CleanupPaths += @()
     }
     try {
         $downloadTask = $script:HttpClient.GetByteArrayAsync($URL)
@@ -255,7 +261,8 @@ function Get-RemoteContent {
     # If the raw content was requested, return the content, otherwise, return the FileInfo object
     if ($Raw) {
         return Get-Content -Path $localFile.FullName
-    } else {
+    }
+    else {
         return $localFile
     }
 }
@@ -468,7 +475,8 @@ function Test-GithubToken {
     # Try parsing the value to a datetime before storing it
     if ([DateTime]::TryParse($tokenExpiration, [ref]$tokenExpiration)) {
         Write-Debug "Token expiration successfully parsed as DateTime ($tokenExpiration)"
-    } else {
+    }
+    else {
         # TryParse Failed
         Write-Warning 'Could not parse expiration date as a DateTime object. It will be set to the minimum value'
         $tokenExpiration = [System.DateTime]::MinValue
@@ -813,7 +821,7 @@ if (`$manifestFolder) {
 
 --> Comparing ARP Entries
 '@
-    (Compare-Object (Get-ARPTable) `$originalARP -Property DisplayName,DisplayVersion,Publisher,ProductCode,Scope)| Select-Object -Property * -ExcludeProperty SideIndicator | Format-Table
+    (Compare-Object (Get-ARPTable) `$originalARP -Property DisplayName,DisplayVersion,Publisher,ProductCode,Scope)| Select-Object -Property * -ExcludeProperty SideIndicator | Format-List
 }
 
 `$BoundParameterScript = Get-ChildItem -Filter 'BoundParameterScript.ps1'
