@@ -28,7 +28,7 @@
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseSingularNouns', '', Scope = 'Function', Target = '*Metadata',
   Justification = 'Metadata is used as a mass noun and is therefore singular in the cases used in this script')]
 
-Param
+param
 (
   [switch] $Settings,
   [switch] $AutoUpgrade,
@@ -40,9 +40,26 @@ Param
   [Parameter(Mandatory = $false)]
   [string] $PackageVersion,
   [Parameter(Mandatory = $false)]
-  [string] $Mode
+  [string] $Mode,
+  [string] $Proxy = $null
 )
 $ProgressPreference = 'SilentlyContinue'
+
+if (!$Proxy) {
+  # Try inspect the system-level proxy settings by visiting GitHub RESTful API Endpoint and extract proxy settings from it.
+  # This is a bit of a hack, but it works for most cases.
+  Write-Verbose 'No Proxy specified! Trying to get the system-level proxy settings.'
+  $proxyInfo = [System.Net.WebRequest]::GetSystemWebProxy().GetProxy('https://api.github.com/')
+  if ($proxyInfo.Scheme -and $proxyInfo.Host -and $proxyInfo.Port) {
+    $Proxy = $proxyInfo.Scheme + "://" + $proxyInfo.Host + ':' + $proxyInfo.Port
+    Write-Information "Using Proxy: $Proxy"
+  }
+  else {
+    # No proxy settings found
+    Write-Information "No Proxy settings found! Try without proxy ..."
+    $Proxy = $null
+  }
+}
 
 if ($help) {
   Write-Host -ForegroundColor 'Green' 'For full documentation of the script, see https://github.com/microsoft/winget-pkgs/tree/master/doc/tools/YamlCreate.md'
@@ -54,8 +71,8 @@ if ($help) {
 
 # Custom menu prompt that listens for key presses. Requires a prompt and array of entries at minimum. Entries preceeded with `*` are shown in green
 # Returns a console key value
-Function Invoke-KeypressMenu {
-  Param
+function Invoke-KeypressMenu {
+  param
   (
     [Parameter(Mandatory = $true, Position = 0)]
     [string] $Prompt,
@@ -80,7 +97,8 @@ Function Invoke-KeypressMenu {
   if ($PSBoundParameters.ContainsKey('HelpText') -and (![string]::IsNullOrWhiteSpace($HelpText))) {
     if ($PSBoundParameters.ContainsKey('HelpTextColor') -and (![string]::IsNullOrWhiteSpace($HelpTextColor))) {
       Write-Host -ForegroundColor $HelpTextColor $HelpText
-    } else {
+    }
+    else {
       Write-Host -ForegroundColor 'Blue' $HelpText
     }
   }
@@ -89,7 +107,8 @@ Function Invoke-KeypressMenu {
     if ($_isDefault) {
       $_entry = '  ' + $entry.Substring(1)
       $_color = 'Green'
-    } else {
+    }
+    else {
       $_entry = '  ' + $entry
       $_color = 'White'
     }
@@ -98,7 +117,8 @@ Function Invoke-KeypressMenu {
   Write-Host
   if ($PSBoundParameters.ContainsKey('DefaultString') -and (![string]::IsNullOrWhiteSpace($DefaultString))) {
     Write-Host -NoNewline "Enter Choice (default is '$DefaultString'): "
-  } else {
+  }
+  else {
     Write-Host -NoNewline 'Enter Choice ('
     Write-Host -NoNewline -ForegroundColor 'Green' 'Green'
     Write-Host -NoNewline ' is default): '
@@ -134,9 +154,11 @@ if (Get-Command 'git' -ErrorAction SilentlyContinue) {
           Write-Host
           try {
             winget upgrade --id Git.Git --exact
-          } catch {
+          }
+          catch {
             throw [UnmetDependencyException]::new('Git could not be upgraded successfully', $_)
-          } finally {
+          }
+          finally {
             $gitVersionString = ((git version) | Select-String '([0-9]{1,}\.?){3,}').Matches.Value.Trim(' ', '.')
             $gitVersion = [System.Version]::Parse($gitVersionString)
             if ($gitVersion -lt $GitMinimumVersion) {
@@ -146,14 +168,16 @@ if (Get-Command 'git' -ErrorAction SilentlyContinue) {
         }
         default { Write-Host; throw [UnmetDependencyException]::new('The version of git installed on your machine does not satisfy the requirement of version >= 2.39.1') }
       }
-    } else {
+    }
+    else {
       throw [UnmetDependencyException]::new('The version of git installed on your machine does not satisfy the requirement of version >= 2.39.1')
     }
   }
   # Check whether the script is present inside a fork/clone of microsoft/winget-pkgs repository
   try {
     $script:gitTopLevel = (Resolve-Path $(git rev-parse --show-toplevel)).Path
-  } catch {
+  }
+  catch {
     # If there was an exception, the user isn't in a git repo. Throw a custom exception and pass the original exception as an InternalException
     throw [UnmetDependencyException]::new('This script must be run from inside a clone of the winget-pkgs repository', $_.Exception)
   }
@@ -184,7 +208,8 @@ function Initialize-Module {
       Write-Debug 'NuGet Package Provider was not found, it will be installed'
       # This might fail if the user is not an administrator, so catch the errors
       Install-PackageProvider -Name NuGet -MinimumVersion $script:NuGetMinimumVersion.ToString() -Force -Scope CurrentUser
-    } catch {
+    }
+    catch {
       Write-Error 'Could not install the NuGet package provider which is required to install script dependencies.' -ErrorAction Continue
       Write-Error "You may be able to resolve this by running: Install-PackageProvider -Name NuGet -MinimumVersion $($script:NuGetMinimumVersion.ToString())"
     }
@@ -194,11 +219,13 @@ function Initialize-Module {
   if ($installedModules) {
     # If the module is installed, attempt to upgrade it
     Write-Debug "Found $Name in installed modules"
-  } else {
+  }
+  else {
     # If the module is not installed, attempt to install it
     try {
       Install-Module -Name $Name -Force -Repository PSGallery -Scope CurrentUser
-    } catch {
+    }
+    catch {
       Write-Error "$Name was unable to be installed successfully"
     }
   }
@@ -211,7 +238,8 @@ function Initialize-Module {
 
       Import-Module @importParameters
     }
-  } catch {
+  }
+  catch {
     Write-Error "$Name was found in available modules, but could not be imported"
   }
 }
@@ -269,13 +297,20 @@ if ($ScriptSettings.EnableDeveloperOptions -eq $true -and $null -ne $ScriptSetti
 
 $useDirectSchemaLink = if ($env:GITHUB_ACTIONS -eq $true) {
   $true
-} else {
-  (Invoke-WebRequest "https://aka.ms/winget-manifest.version.$ManifestVersion.schema.json" -UseBasicParsing).Content -match '<!doctype html>'
+}
+else {
+  $webRequestParams = @{
+    Uri             = "https://aka.ms/winget-manifest.version.$ManifestVersion.schema.json"
+    UseBasicParsing = $true
+  }
+  if ($Proxy) { $webRequestParams.Proxy = $Proxy }
+  (Invoke-WebRequest @webRequestParams).Content -match '<!doctype html>'
 }
 
 if ($ManifestVersion -ne 'latest') {
   $FullManifestVersion = "v$ManifestVersion"
-} else {
+}
+else {
   $FullManifestVersion = $ManifestVersion
 }
 
@@ -288,11 +323,14 @@ $SchemaUrls = @{
 
 # Fetch Schema data from github for entry validation, key ordering, and automatic commenting
 try {
-  $LocaleSchema = @(Invoke-WebRequest $SchemaUrls.defaultLocale -UseBasicParsing | ConvertFrom-Json)
+  $webRequestParams = @{ UseBasicParsing = $true }
+  if ($Proxy) { $webRequestParams.Proxy = $Proxy }
+
+  $LocaleSchema = @(Invoke-WebRequest @webRequestParams -Uri $SchemaUrls.defaultLocale | ConvertFrom-Json)
   $LocaleProperties = (ConvertTo-Yaml $LocaleSchema.properties | ConvertFrom-Yaml -Ordered).Keys
-  $VersionSchema = @(Invoke-WebRequest $SchemaUrls.version -UseBasicParsing | ConvertFrom-Json)
+  $VersionSchema = @(Invoke-WebRequest @webRequestParams -Uri $SchemaUrls.version | ConvertFrom-Json)
   $VersionProperties = (ConvertTo-Yaml $VersionSchema.properties | ConvertFrom-Yaml -Ordered).Keys
-  $InstallerSchema = @(Invoke-WebRequest $SchemaUrls.installer -UseBasicParsing | ConvertFrom-Json)
+  $InstallerSchema = @(Invoke-WebRequest @webRequestParams -Uri $SchemaUrls.installer | ConvertFrom-Json)
   $InstallerProperties = (ConvertTo-Yaml $InstallerSchema.properties | ConvertFrom-Yaml -Ordered).Keys
   $InstallerSwitchProperties = (ConvertTo-Yaml $InstallerSchema.definitions.InstallerSwitches.properties | ConvertFrom-Yaml -Ordered).Keys
   $InstallerEntryProperties = (ConvertTo-Yaml $InstallerSchema.definitions.Installer.properties | ConvertFrom-Yaml -Ordered).Keys
@@ -305,7 +343,8 @@ try {
   @($SchemaUrls.Keys) | ForEach-Object {
     $SchemaUrls[$_] = "https://aka.ms/winget-manifest.$_.$ManifestVersion.schema.json"
   }
-} catch {
+}
+catch {
   # Here we want to pass the exception as an inner exception for debugging if necessary
   throw [System.Net.WebException]::new('Manifest schemas could not be downloaded. Try running the script again', $_.Exception)
 }
@@ -398,7 +437,8 @@ if ($remoteUpstreamUrl -and $remoteUpstreamUrl -ne $wingetUpstream) {
   if (-not (Set-Remote -RemoteName upstream -Url $wingetUpstream)) {
     Write-Warning "Failed to update upstream remote URL. You may need to manually run: git remote set-url upstream $wingetUpstream"
   }
-} elseif (!$remoteUpstreamUrl) {
+}
+elseif (!$remoteUpstreamUrl) {
   Write-Host -ForegroundColor 'Yellow' 'Upstream does not exist. Permanently adding https://github.com/microsoft/winget-pkgs as remote upstream'
   if (-not (Set-Remote -RemoteName upstream -Url $wingetUpstream)) {
     Write-Warning "Failed to add upstream remote. You may need to manually run: git remote add upstream $wingetUpstream"
@@ -407,7 +447,7 @@ if ($remoteUpstreamUrl -and $remoteUpstreamUrl -ne $wingetUpstream) {
 
 # Since this script changes the UI Calling Culture, a clean exit should set it back to the user preference
 # If the remote upstream was changed, that should also be set back
-Function Invoke-CleanExit {
+function Invoke-CleanExit {
 
   if ($remoteUpstreamUrl -and $remoteUpstreamUrl -ne $wingetUpstream) {
     git remote set-url upstream $remoteUpstreamUrl
@@ -424,8 +464,8 @@ Function Invoke-CleanExit {
 
 # This function validates whether a string matches Minimum Length, Maximum Length, and Regex pattern
 # The switches can be used to specify if null values are allowed regardless of validation
-Function Test-String {
-  Param
+function Test-String {
+  param
   (
     [Parameter(Mandatory = $true, Position = 0)]
     [AllowEmptyString()]
@@ -455,7 +495,8 @@ Function Test-String {
   }
   if ($AllowNull -and [string]::IsNullOrWhiteSpace($InputString)) {
     $_isValid = $true
-  } elseif ($NotNull -and [string]::IsNullOrWhiteSpace($InputString)) {
+  }
+  elseif ($NotNull -and [string]::IsNullOrWhiteSpace($InputString)) {
     $_isValid = $false
   }
   if ($IsNull) {
@@ -464,14 +505,15 @@ Function Test-String {
 
   if ($Not) {
     return !$_isValid
-  } else {
+  }
+  else {
     return $_isValid
   }
 }
 
 # Gets the effective installer type from an installer
-Function Get-EffectiveInstallerType {
-  Param
+function Get-EffectiveInstallerType {
+  param
   (
     [Parameter(Mandatory = $true, Position = 0)]
     [PSCustomObject] $Installer
@@ -489,8 +531,8 @@ Function Get-EffectiveInstallerType {
 }
 
 # Checks a URL and returns the status code received from the URL
-Function Test-Url {
-  Param
+function Test-Url {
+  param
   (
     [Parameter(Mandatory = $true, Position = 0)]
     [string] $URL
@@ -501,7 +543,8 @@ Function Test-Url {
     $HTTP_Response = $HTTP_Request.GetResponse()
     $script:ResponseUri = $HTTP_Response.ResponseUri.AbsoluteUri
     $HTTP_Status = [int]$HTTP_Response.StatusCode
-  } catch {
+  }
+  catch {
     # Failed to download with the Delivery-Optimization User Agent, so try again with the WinINet User Agent
     try {
       $HTTP_Request = [System.Net.WebRequest]::Create($URL)
@@ -509,18 +552,19 @@ Function Test-Url {
       $HTTP_Response = $HTTP_Request.GetResponse()
       $script:ResponseUri = $HTTP_Response.ResponseUri.AbsoluteUri
       $HTTP_Status = [int]$HTTP_Response.StatusCode
-    } catch {
+    }
+    catch {
       $HTTP_Status = 404
     }
   }
-  If ($null -eq $HTTP_Response) { $HTTP_Status = 404 }
-  Else { $HTTP_Response.Close() }
+  if ($null -eq $HTTP_Response) { $HTTP_Status = 404 }
+  else { $HTTP_Response.Close() }
 
   return $HTTP_Status
 }
 
 # Checks a file name for validity and returns a boolean value
-Function Test-ValidFileName {
+function Test-ValidFileName {
   param([string]$FileName)
   $IndexOfInvalidChar = $FileName.IndexOfAny([System.IO.Path]::GetInvalidFileNameChars())
   # IndexOfAny() returns the value -1 to indicate no such character was found
@@ -529,7 +573,7 @@ Function Test-ValidFileName {
 
 # Prompts user to enter an Installer URL, Tests the URL to ensure it results in a response code of 200, validates it against the manifest schema
 # Returns the validated URL which was entered
-Function Request-InstallerUrl {
+function Request-InstallerUrl {
   do {
     Write-Host -ForegroundColor $(if ($script:_returnValue.Severity -gt 1) { 'red' } else { 'yellow' }) $script:_returnValue.ErrorString()
     if ($script:_returnValue.StatusCode -ne 409) {
@@ -539,7 +583,8 @@ Function Request-InstallerUrl {
     $script:_returnValue = [ReturnValue]::GenericError()
     if ((Test-Url $NewInstallerUrl) -ne 200) {
       $script:_returnValue = [ReturnValue]::new(502, 'Invalid URL Response', 'The URL did not return a successful response from the server', 2)
-    } else {
+    }
+    else {
       if (($script:ResponseUri -ne $NewInstallerUrl) -and ($ScriptSettings.UseRedirectedURL -ne 'never') -and ($NewInstallerUrl -notmatch 'github')) {
         #If urls don't match, ask to update; If they do update, set custom error and check for validity;
         $_menu = @{
@@ -562,12 +607,15 @@ Function Request-InstallerUrl {
       if ($script:_returnValue.StatusCode -ne 409) {
         if (Test-String $NewInstallerUrl -MaxLength $Patterns.InstallerUrlMaxLength -MatchPattern $Patterns.InstallerUrl -NotNull) {
           $script:_returnValue = [ReturnValue]::Success()
-        } else {
+        }
+        else {
           if (Test-String -not $NewInstallerUrl -MaxLength $Patterns.InstallerUrlMaxLength -NotNull) {
             $script:_returnValue = [ReturnValue]::LengthError(1, $Patterns.InstallerUrlMaxLength)
-          } elseif (Test-String -not $NewInstallerUrl -MatchPattern $Patterns.InstallerUrl) {
+          }
+          elseif (Test-String -not $NewInstallerUrl -MatchPattern $Patterns.InstallerUrl) {
             $script:_returnValue = [ReturnValue]::PatternError()
-          } else {
+          }
+          else {
             $script:_returnValue = [ReturnValue]::GenericError()
           }
         }
@@ -577,8 +625,8 @@ Function Request-InstallerUrl {
   return $NewInstallerUrl
 }
 
-Function Get-InstallerFile {
-  Param
+function Get-InstallerFile {
+  param
   (
     [Parameter(Mandatory = $true, Position = 0)]
     [string] $URI,
@@ -604,12 +652,14 @@ Function Get-InstallerFile {
   # Download the file
   try {
     $_WebClient.DownloadFile($URI, $_OutFile)
-  } catch {
+  }
+  catch {
     # Failed to download with the Delivery-Optimization User Agent, so try again with the WinINet User Agent
     $_WebClient.Headers.Clear()
     $_WebClient.Headers.Add('User-Agent', $script:backupUserAgent)
     $_WebClient.DownloadFile($URI, $_OutFile)
-  } finally {
+  }
+  finally {
     # Dispose of the web client to release the resources it uses
     $_WebClient.Dispose()
   }
@@ -617,7 +667,7 @@ Function Get-InstallerFile {
   return $_OutFile
 }
 
-Function Get-UserSavePreference {
+function Get-UserSavePreference {
   switch ($ScriptSettings.SaveToTemporaryFolder) {
     'always' { $_Preference = '0' }
     'never' { $_Preference = '1' }
@@ -639,8 +689,8 @@ Function Get-UserSavePreference {
   return $_Preference
 }
 
-Function Get-UriArchitecture {
-  Param
+function Get-UriArchitecture {
+  param
   (
     [Parameter(Mandatory = $true, Position = 0)]
     [string] $URI
@@ -653,8 +703,8 @@ Function Get-UriArchitecture {
   return $null
 }
 
-Function Get-UriScope {
-  Param
+function Get-UriScope {
+  param
   (
     [Parameter(Mandatory = $true, Position = 0)]
     [string] $URI
@@ -684,8 +734,8 @@ function Get-PublisherHash($publisherName) {
   return $result.ToLower();
 }
 
-Function Get-PackageFamilyName {
-  Param
+function Get-PackageFamilyName {
+  param
   (
     [Parameter(Mandatory = $true, Position = 0)]
     [string] $FilePath
@@ -720,8 +770,8 @@ Function Get-PackageFamilyName {
 # Prompts the user to enter the Package Identifier if it has not been set
 # Validates that the package identifier matches the schema
 # Returns the package identifier
-Function Read-PackageIdentifier {
-  Param(
+function Read-PackageIdentifier {
+  param(
     [Parameter(Mandatory = $true, Position = 0)]
     [AllowEmptyString()]
     [string] $PackageIdentifier
@@ -737,12 +787,15 @@ Function Read-PackageIdentifier {
     $script:PackageIdentifierFolder = $_EnteredIdentifier.Replace('.', '\')
     if (Test-String $_EnteredIdentifier -MinLength 4 -MaxLength $Patterns.IdentifierMaxLength -MatchPattern $Patterns.PackageIdentifier) {
       $script:_returnValue = [ReturnValue]::Success()
-    } else {
+    }
+    else {
       if (Test-String -not $_EnteredIdentifier -MinLength 4 -MaxLength $Patterns.IdentifierMaxLength) {
         $script:_returnValue = [ReturnValue]::LengthError(4, $Patterns.IdentifierMaxLength)
-      } elseif (Test-String -not $_EnteredIdentifier -MatchPattern $Patterns.PackageIdentifier) {
+      }
+      elseif (Test-String -not $_EnteredIdentifier -MatchPattern $Patterns.PackageIdentifier) {
         $script:_returnValue = [ReturnValue]::PatternError()
-      } else {
+      }
+      else {
         $script:_returnValue = [ReturnValue]::GenericError()
       }
     }
@@ -753,22 +806,23 @@ Function Read-PackageIdentifier {
 # Prompts the user to enter the details for an archive Installer
 # Takes the installer as an input
 # Returns the modified installer
-Function Read-NestedInstaller {
-  Param(
+function Read-NestedInstaller {
+  param(
     [Parameter(Mandatory = $true, Position = 0)]
     [PSCustomObject] $_Installer
   )
 
-  if ($_Installer['InstallerType'] -CIn @($Patterns.ArchiveInstallerTypes)) {
+  if ($_Installer['InstallerType'] -cin @($Patterns.ArchiveInstallerTypes)) {
     # Manual Entry of Nested Installer Type with validation
-    if ($_Installer['NestedInstallerType'] -CNotIn @($Patterns.ValidInstallerTypes)) {
+    if ($_Installer['NestedInstallerType'] -cnotin @($Patterns.ValidInstallerTypes)) {
       do {
         Write-Host -ForegroundColor 'Red' $script:_returnValue.ErrorString()
         Write-Host -ForegroundColor 'Green' -Object '[Required] Enter the NestedInstallerType. Options:' , @($Patterns.ValidNestedInstallerTypes -join ', ' )
         $_Installer['NestedInstallerType'] = Read-Host -Prompt 'NestedInstallerType' | TrimString
-        if ($_Installer['NestedInstallerType'] -Cin @($Patterns.ValidNestedInstallerTypes)) {
+        if ($_Installer['NestedInstallerType'] -cin @($Patterns.ValidNestedInstallerTypes)) {
           $script:_returnValue = [ReturnValue]::Success()
-        } else {
+        }
+        else {
           $script:_returnValue = [ReturnValue]::new(400, 'Invalid Installer Type', "Value must exist in the enum - $(@($Patterns.ValidNestedInstallerTypes -join ', '))", 2)
         }
       } until ($script:_returnValue.StatusCode -eq [ReturnValue]::Success().StatusCode)
@@ -790,7 +844,8 @@ Function Read-NestedInstaller {
 
         if (Test-String $_RelativePath -MinLength $Patterns.RelativeFilePathMinLength -MaxLength $Patterns.RelativeFilePathMaxLength) {
           $script:_returnValue = [ReturnValue]::Success()
-        } else {
+        }
+        else {
           $script:_returnValue = [ReturnValue]::LengthError($Patterns.RelativeFilePathMinLength, $Patterns.RelativeFilePathMaxLength)
         }
         if ($_RelativePath -in @($_NestedInstallerFiles.RelativeFilePath)) {
@@ -808,7 +863,8 @@ Function Read-NestedInstaller {
 
           if (Test-String $_InstallerFile['PortableCommandAlias'] -MinLength $Patterns.PortableCommandAliasMinLength -MaxLength $Patterns.PortableCommandAliasMaxLength -AllowNull) {
             $script:_returnValue = [ReturnValue]::Success()
-          } else {
+          }
+          else {
             $script:_returnValue = [ReturnValue]::LengthError($Patterns.PortableCommandAliasMinLength, $Patterns.PortableCommandAliasMaxLength)
           }
           if ("$($_InstallerFile['PortableCommandAlias'])" -in @($_NestedInstallerFiles.PortableCommandAlias)) {
@@ -872,8 +928,8 @@ Function Read-NestedInstaller {
   return $_Installer
 }
 
-Function Read-AppsAndFeaturesEntries {
-  Param(
+function Read-AppsAndFeaturesEntries {
+  param(
     [Parameter(Mandatory = $true, Position = 0)]
     [PSCustomObject] $_Installer
   )
@@ -892,8 +948,8 @@ Function Read-AppsAndFeaturesEntries {
   return $_AppsAndFeaturesEntries
 }
 
-Function Read-AppsAndFeaturesEntry {
-  Param(
+function Read-AppsAndFeaturesEntry {
+  param(
     [Parameter(Mandatory = $true, Position = 0)]
     [PSCustomObject] $_AppsAndFeaturesEntry
   )
@@ -906,8 +962,8 @@ Function Read-AppsAndFeaturesEntry {
   return Restore-YamlKeyOrder $_AppsAndFeaturesEntry $AppsAndFeaturesEntryProperties -NoComments
 }
 
-Function Read-ARPDisplayName {
-  Param(
+function Read-ARPDisplayName {
+  param(
     [Parameter(Mandatory = $true, Position = 0)]
     [string] $_DisplayName
   )
@@ -921,7 +977,8 @@ Function Read-ARPDisplayName {
 
     if (Test-String $_DisplayName -MinLength $Patterns.ARP_DisplayNameMinLength -MaxLength $Patterns.ARP_DisplayNameMaxLength -AllowNull) {
       $script:_returnValue = [ReturnValue]::Success()
-    } else {
+    }
+    else {
       $script:_returnValue = [ReturnValue]::LengthError($Patterns.ARP_DisplayNameMinLength, $Patterns.ARP_DisplayNameMaxLength)
     }
   } until ($script:_returnValue.StatusCode -eq [ReturnValue]::Success().StatusCode)
@@ -929,8 +986,8 @@ Function Read-ARPDisplayName {
   return $_DisplayName
 }
 
-Function Read-ARPPublisher {
-  Param(
+function Read-ARPPublisher {
+  param(
     [Parameter(Mandatory = $true, Position = 0)]
     [string] $_Publisher
   )
@@ -944,7 +1001,8 @@ Function Read-ARPPublisher {
 
     if (Test-String $_Publisher -MinLength $Patterns.ARP_PublisherMinLength -MaxLength $Patterns.ARP_PublisherMaxLength -AllowNull) {
       $script:_returnValue = [ReturnValue]::Success()
-    } else {
+    }
+    else {
       $script:_returnValue = [ReturnValue]::LengthError($Patterns.ARP_PublisherMinLength, $Patterns.ARP_PublisherMaxLength)
     }
   } until ($script:_returnValue.StatusCode -eq [ReturnValue]::Success().StatusCode)
@@ -952,8 +1010,8 @@ Function Read-ARPPublisher {
   return $_Publisher
 }
 
-Function Read-ARPDisplayVersion {
-  Param(
+function Read-ARPDisplayVersion {
+  param(
     [Parameter(Mandatory = $true, Position = 0)]
     [string] $_DisplayVersion
   )
@@ -967,7 +1025,8 @@ Function Read-ARPDisplayVersion {
 
     if (Test-String $_DisplayVersion -MinLength $Patterns.ARP_DisplayVersionMinLength -MaxLength $Patterns.ARP_DisplayVersionMaxLength -AllowNull) {
       $script:_returnValue = [ReturnValue]::Success()
-    } else {
+    }
+    else {
       $script:_returnValue = [ReturnValue]::LengthError($Patterns.ARP_DisplayVersionMinLength, $Patterns.ARP_DisplayVersionMaxLength)
     }
   } until ($script:_returnValue.StatusCode -eq [ReturnValue]::Success().StatusCode)
@@ -978,7 +1037,7 @@ Function Read-ARPDisplayVersion {
 # Prompts the user to enter installer values
 # Sets the $script:Installers value as an output
 # Returns void
-Function Read-InstallerEntry {
+function Read-InstallerEntry {
   $_Installer = [ordered] @{}
   # Request user enter Installer URL
   $_Installer['InstallerUrl'] = Request-InstallerUrl
@@ -1006,7 +1065,8 @@ Function Read-InstallerEntry {
       Write-Host 'Downloading URL. This will take a while...' -ForegroundColor Blue
       try {
         $script:dest = Get-InstallerFile -URI $_Installer['InstallerUrl'] -PackageIdentifier $PackageIdentifier -PackageVersion $PackageVersion
-      } catch {
+      }
+      catch {
         # Here we also want to pass any exceptions through for potential debugging
         throw [System.Net.WebException]::new('The file could not be downloaded. Try running the script again', $_.Exception)
       }
@@ -1020,7 +1080,8 @@ Function Read-InstallerEntry {
       if ($_) { $_Installer['Scope'] = $_ | Select-Object -First 1 }
       if ([System.Environment]::OSVersion.Platform -match 'Win' -and ($script:dest).EndsWith('.msi')) {
         $ProductCode = [string](Get-MSIProperty -Path $script:dest -Property 'ProductCode').Value
-      } elseif ([System.Environment]::OSVersion.Platform -match 'Unix' -and (Get-Item $script:dest).Name.EndsWith('.msi')) {
+      }
+      elseif ([System.Environment]::OSVersion.Platform -match 'Unix' -and (Get-Item $script:dest).Name.EndsWith('.msi')) {
         $ProductCode = ([string](file $script:dest) | Select-String -Pattern '{[A-Z0-9]{8}-([A-Z0-9]{4}-){3}[A-Z0-9]{12}}').Matches.Value
       }
       if (Test-String -Not "$ProductCode" -IsNull) { $_Installer['ProductCode'] = "$ProductCode" }
@@ -1035,7 +1096,8 @@ Function Read-InstallerEntry {
         $_Installer['InstallerSha256'] = $_Installer['InstallerSha256'].toUpper()
         if ($_Installer['InstallerSha256'] -match $Patterns.InstallerSha256) {
           $script:_returnValue = [ReturnValue]::Success()
-        } else {
+        }
+        else {
           $script:_returnValue = [ReturnValue]::PatternError()
         }
       } until ($script:_returnValue.StatusCode -eq [ReturnValue]::Success().StatusCode)
@@ -1053,22 +1115,24 @@ Function Read-InstallerEntry {
     Read-Host -Prompt 'Architecture' -OutVariable _ | Out-Null
     if (Test-String $_ -Not -IsNull) { $_Installer['Architecture'] = $_ | TrimString }
 
-    if ($_Installer['Architecture'] -Cin @($Patterns.ValidArchitectures)) {
+    if ($_Installer['Architecture'] -cin @($Patterns.ValidArchitectures)) {
       $script:_returnValue = [ReturnValue]::Success()
-    } else {
+    }
+    else {
       $script:_returnValue = [ReturnValue]::new(400, 'Invalid Architecture', "Value must exist in the enum - $(@($Patterns.ValidArchitectures -join ', '))", 2)
     }
   } until ($script:_returnValue.StatusCode -eq [ReturnValue]::Success().StatusCode)
 
   # Manual Entry of Installer Type with validation
-  if ($_Installer['InstallerType'] -CNotIn @($Patterns.ValidInstallerTypes)) {
+  if ($_Installer['InstallerType'] -cnotin @($Patterns.ValidInstallerTypes)) {
     do {
       Write-Host -ForegroundColor 'Red' $script:_returnValue.ErrorString()
       Write-Host -ForegroundColor 'Green' -Object '[Required] Enter the InstallerType. Options:' , @($Patterns.ValidInstallerTypes -join ', ' )
       $_Installer['InstallerType'] = Read-Host -Prompt 'InstallerType' | TrimString
-      if ($_Installer['InstallerType'] -Cin @($Patterns.ValidInstallerTypes)) {
+      if ($_Installer['InstallerType'] -cin @($Patterns.ValidInstallerTypes)) {
         $script:_returnValue = [ReturnValue]::Success()
-      } else {
+      }
+      else {
         $script:_returnValue = [ReturnValue]::new(400, 'Invalid Installer Type', "Value must exist in the enum - $(@($Patterns.ValidInstallerTypes -join ', '))", 2)
       }
       if ($_Installer['InstallerType'] -eq 'zip' -and [version]$ManifestVersion -lt [version]'1.4.0') {
@@ -1092,9 +1156,11 @@ Function Read-InstallerEntry {
 
       if (Test-String $_Switches['Silent'] -MaxLength $Patterns.SilentSwitchMaxLength -NotNull) {
         $script:_returnValue = [ReturnValue]::Success()
-      } elseif ((Get-EffectiveInstallerType $_Installer) -ne 'exe' -and (Test-String $_Switches['Silent'] -MaxLength $Patterns.SilentSwitchMaxLength -AllowNull)) {
+      }
+      elseif ((Get-EffectiveInstallerType $_Installer) -ne 'exe' -and (Test-String $_Switches['Silent'] -MaxLength $Patterns.SilentSwitchMaxLength -AllowNull)) {
         $script:_returnValue = [ReturnValue]::Success()
-      } else {
+      }
+      else {
         $script:_returnValue = [ReturnValue]::LengthError(1, $Patterns.SilentSwitchMaxLength)
       }
     } until ($script:_returnValue.StatusCode -eq [ReturnValue]::Success().StatusCode)
@@ -1108,9 +1174,11 @@ Function Read-InstallerEntry {
 
       if (Test-String $_Switches['SilentWithProgress'] -MaxLength $Patterns.ProgressSwitchMaxLength -NotNull) {
         $script:_returnValue = [ReturnValue]::Success()
-      } elseif ((Get-EffectiveInstallerType $_Installer) -ne 'exe' -and (Test-String $_Switches['SilentWithProgress'] -MaxLength $Patterns.ProgressSwitchMaxLength -AllowNull)) {
+      }
+      elseif ((Get-EffectiveInstallerType $_Installer) -ne 'exe' -and (Test-String $_Switches['SilentWithProgress'] -MaxLength $Patterns.ProgressSwitchMaxLength -AllowNull)) {
         $script:_returnValue = [ReturnValue]::Success()
-      } else {
+      }
+      else {
         $script:_returnValue = [ReturnValue]::LengthError(1, $Patterns.ProgressSwitchMaxLength)
       }
     } until ($script:_returnValue.StatusCode -eq [ReturnValue]::Success().StatusCode)
@@ -1124,7 +1192,8 @@ Function Read-InstallerEntry {
     if ($_) { $_Switches['Custom'] = $_ | TrimString }
     if (Test-String $_Switches['Custom'] -MaxLength $Patterns.CustomSwitchMaxLength -AllowNull) {
       $script:_returnValue = [ReturnValue]::Success()
-    } else {
+    }
+    else {
       $script:_returnValue = [ReturnValue]::LengthError(1, $Patterns.CustomSwitchMaxLength)
     }
   } until ($script:_returnValue.StatusCode -eq [ReturnValue]::Success().StatusCode)
@@ -1145,7 +1214,8 @@ Function Read-InstallerEntry {
         if ($_) { $_Installer['SignatureSha256'] = $_ | TrimString }
         if (Test-String $_Installer['SignatureSha256'] -MatchPattern $Patterns.SignatureSha256 -AllowNull) {
           $script:_returnValue = [ReturnValue]::Success()
-        } else {
+        }
+        else {
           $script:_returnValue = [ReturnValue]::PatternError()
         }
       } until ($script:_returnValue.StatusCode -eq [ReturnValue]::Success().StatusCode)
@@ -1154,7 +1224,8 @@ Function Read-InstallerEntry {
     # Prompt user to find package name automatically, unless package was not downloaded
     if ($script:SaveOption -eq '2' -or (!$(Test-Path $script:dest))) {
       $ChoicePfn = '1'
-    } else {
+    }
+    else {
       $_menu = @{
         entries       = @('*[F] Find Automatically'; '[M] Manually Enter PackageFamilyName')
         Prompt        = 'Discover the package family name?'
@@ -1187,12 +1258,15 @@ Function Read-InstallerEntry {
       if (Test-String $_Installer['PackageFamilyName'] -MaxLength $Patterns.FamilyNameMaxLength -MatchPattern $Patterns.FamilyName -AllowNull) {
         if (Test-String $_Installer['PackageFamilyName'] -IsNull) { $_Installer['PackageFamilyName'] = "$([char]0x2370)" }
         $script:_returnValue = [ReturnValue]::Success()
-      } else {
+      }
+      else {
         if (Test-String -not $_Installer['PackageFamilyName'] -MaxLength $Patterns.FamilyNameMaxLength) {
           $script:_returnValue = [ReturnValue]::LengthError(1, $Patterns.FamilyNameMaxLength)
-        } elseif (Test-String -not $_Installer['PackageFamilyName'] -MatchPattern $Patterns.FamilyName) {
+        }
+        elseif (Test-String -not $_Installer['PackageFamilyName'] -MatchPattern $Patterns.FamilyName) {
           $script:_returnValue = [ReturnValue]::PatternError()
-        } else {
+        }
+        else {
           $script:_returnValue = [ReturnValue]::GenericError()
         }
       }
@@ -1211,12 +1285,15 @@ Function Read-InstallerEntry {
 
     if (Test-String $_Installer['InstallerLocale'] -MaxLength $Patterns.InstallerLocaleMaxLength -MatchPattern $Patterns.PackageLocale -AllowNull) {
       $script:_returnValue = [ReturnValue]::Success()
-    } else {
+    }
+    else {
       if (Test-String -not $_Installer['InstallerLocale'] -MaxLength $Patterns.InstallerLocaleMaxLength -AllowNull) {
         $script:_returnValue = [ReturnValue]::LengthError(0, $Patterns.InstallerLocaleMaxLength)
-      } elseif (Test-String -not $_Installer['InstallerLocale'] -MatchPattern $Patterns.PackageLocale) {
+      }
+      elseif (Test-String -not $_Installer['InstallerLocale'] -MatchPattern $Patterns.PackageLocale) {
         $script:_returnValue = [ReturnValue]::PatternError()
-      } else {
+      }
+      else {
         $script:_returnValue = [ReturnValue]::GenericError()
       }
     }
@@ -1235,7 +1312,8 @@ Function Read-InstallerEntry {
 
       if (Test-String $_Installer['ProductCode'] -MinLength $Patterns.ProductCodeMinLength -MaxLength $Patterns.ProductCodeMaxLength -AllowNull) {
         $script:_returnValue = [ReturnValue]::Success()
-      } else {
+      }
+      else {
         $script:_returnValue = [ReturnValue]::LengthError($Patterns.ProductCodeMinLength, $Patterns.ProductCodeMaxLength)
       }
     } until ($script:_returnValue.StatusCode -eq [ReturnValue]::Success().StatusCode)
@@ -1277,10 +1355,12 @@ Function Read-InstallerEntry {
       Get-Date([datetime]$($ReleaseDate | TrimString)) -f 'yyyy-MM-dd' -OutVariable _ValidDate | Out-Null
       if ($_ValidDate) { $_Installer['ReleaseDate'] = $_ValidDate | TrimString }
       $script:_returnValue = [ReturnValue]::Success()
-    } catch {
+    }
+    catch {
       if (Test-String $ReleaseDate -IsNull) {
         $script:_returnValue = [ReturnValue]::Success()
-      } else {
+      }
+      else {
         $script:_returnValue = [ReturnValue]::new(400, 'Invalid Date', 'Input could not be resolved to a date', 2)
       }
     }
@@ -1331,7 +1411,7 @@ Function Read-InstallerEntry {
 # Prompts user for Installer Values using the `Quick Update` Method
 # Sets the $script:Installers value as an output
 # Returns void
-Function Read-QuickInstallerEntry {
+function Read-QuickInstallerEntry {
   # We know old manifests exist if we got here without error
   # Fetch the old installers based on the manifest type
   if ($script:OldInstallerManifest) { $_OldInstallers = $script:OldInstallerManifest['Installers'] } else {
@@ -1375,7 +1455,8 @@ Function Read-QuickInstallerEntry {
       try {
         Write-Host -ForegroundColor 'Green' 'Downloading Installer. . .'
         $script:dest = Get-InstallerFile -URI $_NewInstaller['InstallerUrl'] -PackageIdentifier $PackageIdentifier -PackageVersion $PackageVersion
-      } catch {
+      }
+      catch {
         # Here we also want to pass any exceptions through for potential debugging
         throw [System.Net.WebException]::new('The file could not be downloaded. Try running the script again', $_.Exception)
       }
@@ -1392,12 +1473,14 @@ Function Read-QuickInstallerEntry {
       $MSIProductCode = $null
       if ([System.Environment]::OSVersion.Platform -match 'Win' -and ($script:dest).EndsWith('.msi')) {
         $MSIProductCode = [string](Get-MSIProperty -Path $script:dest -Property 'ProductCode').Value
-      } elseif ([System.Environment]::OSVersion.Platform -match 'Unix' -and (Get-Item $script:dest).Name.EndsWith('.msi')) {
+      }
+      elseif ([System.Environment]::OSVersion.Platform -match 'Unix' -and (Get-Item $script:dest).Name.EndsWith('.msi')) {
         $MSIProductCode = ([string](file $script:dest) | Select-String -Pattern '{[A-Z0-9]{8}-([A-Z0-9]{4}-){3}[A-Z0-9]{12}}').Matches.Value
       }
       if (Test-String -not $MSIProductCode -IsNull) {
         $_NewInstaller['ProductCode'] = $MSIProductCode
-      } elseif ( ($_NewInstaller.Keys -contains 'ProductCode') -and ((Get-EffectiveInstallerType $_NewInstaller) -in @('appx'; 'msi'; 'msix'; 'wix'; 'burn'))) {
+      }
+      elseif ( ($_NewInstaller.Keys -contains 'ProductCode') -and ((Get-EffectiveInstallerType $_NewInstaller) -in @('appx'; 'msi'; 'msix'; 'wix'; 'burn'))) {
         $_NewInstaller.Remove('ProductCode')
       }
       # If the installer is msix or appx, try getting the new SignatureSha256
@@ -1408,7 +1491,8 @@ Function Read-QuickInstallerEntry {
       }
       if (Test-String -not $NewSignatureSha256 -IsNull) {
         $_NewInstaller['SignatureSha256'] = $NewSignatureSha256
-      } elseif ($_NewInstaller.Keys -contains 'SignatureSha256') {
+      }
+      elseif ($_NewInstaller.Keys -contains 'SignatureSha256') {
         $_NewInstaller.Remove('SignatureSha256')
       }
       # If the installer is msix or appx, try getting the new package family name
@@ -1417,7 +1501,8 @@ Function Read-QuickInstallerEntry {
         $PackageFamilyName = Get-PackageFamilyName $script:dest
         if (Test-String $PackageFamilyName -MatchPattern $Patterns.FamilyName) {
           $_NewInstaller['PackageFamilyName'] = $PackageFamilyName
-        } elseif ($_NewInstaller.Keys -contains 'PackageFamilyName') {
+        }
+        elseif ($_NewInstaller.Keys -contains 'PackageFamilyName') {
           $_NewInstaller.Remove('PackageFamilyName')
         }
       }
@@ -1445,8 +1530,8 @@ Function Read-QuickInstallerEntry {
 # Requests the user enter an optional value with a prompt
 # If the value already exists, also print the existing value
 # Returns the new value if entered, Returns the existing value if no new value was entered
-Function Read-InstallerMetadataValue {
-  Param
+function Read-InstallerMetadataValue {
+  param
   (
     [Parameter(Mandatory = $true, Position = 0)]
     [AllowNull()]
@@ -1463,7 +1548,8 @@ Function Read-InstallerMetadataValue {
 
   if (Test-String -not $NewValue -IsNull) {
     return $NewValue
-  } else {
+  }
+  else {
     return $Variable
   }
 }
@@ -1471,8 +1557,8 @@ Function Read-InstallerMetadataValue {
 # Sorts keys within an object based on a reference ordered dictionary
 # If a key does not exist, it sets the value to a special character to be removed / commented later
 # Returns the result as a new object
-Function Restore-YamlKeyOrder {
-  Param
+function Restore-YamlKeyOrder {
+  param
   (
     [Parameter(Mandatory = $true, Position = 0)]
     [PSCustomObject] $InputObject,
@@ -1506,7 +1592,8 @@ Function Restore-YamlKeyOrder {
   $SortOrder.GetEnumerator() | ForEach-Object {
     if ($InputObject.Contains($_)) {
       $_Temp.Add($_, $InputObject[$_])
-    } else {
+    }
+    else {
       if (!$NoComments -and $_ -notin $_ExcludedKeys) {
         $_Temp.Add($_, "$([char]0x2370)")
       }
@@ -1516,7 +1603,7 @@ Function Restore-YamlKeyOrder {
 }
 
 # Requests the user to input optional values for the Installer Manifest file
-Function Read-InstallerMetadata {
+function Read-InstallerMetadata {
   Write-Host
 
   # Request File Extensions and validate
@@ -1527,10 +1614,12 @@ Function Read-InstallerMetadata {
 
     if (($script:FileExtensions -split ',').Count -le $Patterns.MaxItemsFileExtensions -and $($script:FileExtensions.Split(',').Trim() | Where-Object { Test-String -Not $_ -MaxLength $Patterns.FileExtensionMaxLength -MatchPattern $Patterns.FileExtension -AllowNull }).Count -eq 0) {
       $script:_returnValue = [ReturnValue]::Success()
-    } else {
+    }
+    else {
       if (($script:FileExtensions -split ',').Count -gt $Patterns.MaxItemsFileExtensions ) {
         $script:_returnValue = [ReturnValue]::MaxItemsError($Patterns.MaxItemsFileExtensions)
-      } else {
+      }
+      else {
         $script:_returnValue = [ReturnValue]::new(400, 'Invalid Entries', "Some entries do not match the requirements defined in the manifest schema - $($script:FileExtensions.Split(',').Trim() | Where-Object { Test-String -Not $_ -MaxLength $Patterns.FileExtensionMaxLength -MatchPattern $Patterns.FileExtension })", 2)
       }
     }
@@ -1543,7 +1632,8 @@ Function Read-InstallerMetadata {
     $script:Protocols = Read-InstallerMetadataValue -Variable $Protocols -Key 'Protocols' -Prompt "[Optional] Enter any Protocols the application provides a handler for. For example: http, https (Max $($Patterns.MaxItemsProtocols))" | ToLower | UniqueItems
     if (($script:Protocols -split ',').Count -le $Patterns.MaxItemsProtocols) {
       $script:_returnValue = [ReturnValue]::Success()
-    } else {
+    }
+    else {
       $script:_returnValue = [ReturnValue]::MaxItemsError($Patterns.MaxItemsProtocols)
     }
   } until ($script:_returnValue.StatusCode -eq [ReturnValue]::Success().StatusCode)
@@ -1555,7 +1645,8 @@ Function Read-InstallerMetadata {
     $script:Commands = Read-InstallerMetadataValue -Variable $Commands -Key 'Commands' -Prompt "[Optional] Enter any Commands or aliases to run the application. For example: msedge (Max $($Patterns.MaxItemsCommands))" | UniqueItems
     if (($script:Commands -split ',').Count -le $Patterns.MaxItemsCommands) {
       $script:_returnValue = [ReturnValue]::Success()
-    } else {
+    }
+    else {
       $script:_returnValue = [ReturnValue]::MaxItemsError($Patterns.MaxItemsCommands)
     }
   }  until ($script:_returnValue.StatusCode -eq [ReturnValue]::Success().StatusCode)
@@ -1570,10 +1661,12 @@ Function Read-InstallerMetadata {
         #Ensure all values are integers
         $script:InstallerSuccessCodes.Split(',').Trim() | ForEach-Object { [long]$_ }
         $script:_returnValue = [ReturnValue]::Success()
-      } catch {
+      }
+      catch {
         $script:_returnValue = [ReturnValue]::new(400, 'Invalid Data Type', 'The value entered does not match the type requirements defined in the manifest schema', 2)
       }
-    } else {
+    }
+    else {
       $script:_returnValue = [ReturnValue]::MaxItemsError($Patterns.MaxItemsSuccessCodes)
     }
   }  until ($script:_returnValue.StatusCode -eq [ReturnValue]::Success().StatusCode)
@@ -1583,12 +1676,14 @@ Function Read-InstallerMetadata {
     if ($script:InstallModes) { $script:InstallModes = $script:InstallModes | UniqueItems }
     $script:InstallModes = Read-InstallerMetadataValue -Variable $script:InstallModes -Key 'InstallModes' -Prompt "[Optional] List of supported installer modes. Options: $($Patterns.ValidInstallModes -join ', ')"
     if ($script:InstallModes) { $script:InstallModes = $script:InstallModes | UniqueItems }
-    if ( (Test-String $script:InstallModes -IsNull) -or (($script:InstallModes -split ',').Count -le $Patterns.MaxItemsInstallModes -and $($script:InstallModes.Split(',').Trim() | Where-Object { $_ -CNotIn $Patterns.ValidInstallModes }).Count -eq 0)) {
+    if ( (Test-String $script:InstallModes -IsNull) -or (($script:InstallModes -split ',').Count -le $Patterns.MaxItemsInstallModes -and $($script:InstallModes.Split(',').Trim() | Where-Object { $_ -cnotin $Patterns.ValidInstallModes }).Count -eq 0)) {
       $script:_returnValue = [ReturnValue]::Success()
-    } else {
+    }
+    else {
       if (($script:InstallModes -split ',').Count -gt $Patterns.MaxItemsInstallModes ) {
         $script:_returnValue = [ReturnValue]::MaxItemsError($Patterns.MaxItemsInstallModes)
-      } else {
+      }
+      else {
         $script:_returnValue = [ReturnValue]::new(400, 'Invalid Entries', "Some entries do not match the requirements defined in the manifest schema - $($script:InstallModes.Split(',').Trim() | Where-Object { $_ -CNotIn $Patterns.ValidInstallModes })", 2)
       }
     }
@@ -1596,7 +1691,7 @@ Function Read-InstallerMetadata {
 }
 
 # Requests the user to input values for the Locale Manifest file
-Function Read-LocaleMetadata {
+function Read-LocaleMetadata {
   # Request Package Locale and Validate
   if (Test-String -not $script:PackageLocale -MaxLength $Patterns.PackageLocaleMaxLength -MatchPattern $Patterns.PackageLocale -NotNull) {
     do {
@@ -1606,12 +1701,15 @@ Function Read-LocaleMetadata {
       $script:PackageLocale = Read-Host -Prompt 'PackageLocale' | TrimString
       if (Test-String $script:PackageLocale -MaxLength $Patterns.PackageLocaleMaxLength -MatchPattern $Patterns.PackageLocale -NotNull) {
         $script:_returnValue = [ReturnValue]::Success()
-      } else {
+      }
+      else {
         if (Test-String $script:PackageLocale -not -MaxLength $Patterns.PackageLocaleMaxLength -NotNull) {
           $script:_returnValue = [ReturnValue]::LengthError(1, $Patterns.PackageLocaleMaxLength)
-        } elseif (Test-String $script:PackageLocale -not -MatchPattern $Patterns.PackageLocale ) {
+        }
+        elseif (Test-String $script:PackageLocale -not -MatchPattern $Patterns.PackageLocale ) {
           $script:_returnValue = [ReturnValue]::PatternError()
-        } else {
+        }
+        else {
           $script:_returnValue = [ReturnValue]::GenericError()
         }
       }
@@ -1623,7 +1721,8 @@ Function Read-LocaleMetadata {
     Write-Host -ForegroundColor 'Red' $script:_returnValue.ErrorString()
     if (Test-String $script:Publisher -IsNull) {
       Write-Host -ForegroundColor 'Green' -Object '[Required] Enter the full publisher name. For example: Microsoft Corporation'
-    } else {
+    }
+    else {
       Write-Host -ForegroundColor 'Yellow' -Object '[Optional] Enter the full publisher name. For example: Microsoft Corporation'
       Write-Host -ForegroundColor 'DarkGray' "Old Variable: $script:Publisher"
     }
@@ -1633,7 +1732,8 @@ Function Read-LocaleMetadata {
     }
     if (Test-String $script:Publisher -MaxLength $Patterns.PublisherMaxLength -NotNull) {
       $script:_returnValue = [ReturnValue]::Success()
-    } else {
+    }
+    else {
       $script:_returnValue = [ReturnValue]::LengthError(1, $Patterns.PublisherMaxLength)
     }
   } until ($script:_returnValue.StatusCode -eq [ReturnValue]::Success().StatusCode)
@@ -1643,7 +1743,8 @@ Function Read-LocaleMetadata {
     Write-Host -ForegroundColor 'Red' $script:_returnValue.ErrorString()
     if (Test-String $script:PackageName -IsNull) {
       Write-Host -ForegroundColor 'Green' -Object '[Required] Enter the full application name. For example: Microsoft Teams'
-    } else {
+    }
+    else {
       Write-Host -ForegroundColor 'Yellow' -Object '[Optional] Enter the full application name. For example: Microsoft Teams'
       Write-Host -ForegroundColor 'DarkGray' "Old Variable: $script:PackageName"
     }
@@ -1652,7 +1753,8 @@ Function Read-LocaleMetadata {
 
     if (Test-String $script:PackageName -MaxLength $Patterns.PackageNameMaxLength -NotNull) {
       $script:_returnValue = [ReturnValue]::Success()
-    } else {
+    }
+    else {
       $script:_returnValue = [ReturnValue]::LengthError(1, $Patterns.PackageNameMaxLength)
     }
   } until ($script:_returnValue.StatusCode -eq [ReturnValue]::Success().StatusCode)
@@ -1669,7 +1771,8 @@ Function Read-LocaleMetadata {
 
       if (Test-String $script:Moniker -MaxLength $Patterns.MonikerMaxLength -AllowNull) {
         $script:_returnValue = [ReturnValue]::Success()
-      } else {
+      }
+      else {
         $script:_returnValue = [ReturnValue]::LengthError(1, $Patterns.MonikerMaxLength)
       }
     } until ($script:_returnValue.StatusCode -eq [ReturnValue]::Success().StatusCode)
@@ -1684,12 +1787,15 @@ Function Read-LocaleMetadata {
     if (Test-String -not $NewPublisherUrl -IsNull) { $script:PublisherUrl = $NewPublisherUrl }
     if (Test-String $script:PublisherUrl -MaxLength $Patterns.GenericUrlMaxLength -MatchPattern $Patterns.GenericUrl -AllowNull) {
       $script:_returnValue = [ReturnValue]::Success()
-    } else {
+    }
+    else {
       if (Test-String -not $script:PublisherUrl -MaxLength $Patterns.GenericUrlMaxLength -AllowNull) {
         $script:_returnValue = [ReturnValue]::LengthError(1, $Patterns.GenericUrlMaxLength)
-      } elseif (Test-String -not $script:PublisherUrl -MatchPattern $Patterns.GenericUrl) {
+      }
+      elseif (Test-String -not $script:PublisherUrl -MatchPattern $Patterns.GenericUrl) {
         $script:_returnValue = [ReturnValue]::PatternError()
-      } else {
+      }
+      else {
         $script:_returnValue = [ReturnValue]::GenericError()
       }
     }
@@ -1704,12 +1810,15 @@ Function Read-LocaleMetadata {
     if (Test-String -not $NewPublisherSupportUrl -IsNull) { $script:PublisherSupportUrl = $NewPublisherSupportUrl }
     if (Test-String $script:PublisherSupportUrl -MaxLength $Patterns.GenericUrlMaxLength -MatchPattern $Patterns.GenericUrl -AllowNull) {
       $script:_returnValue = [ReturnValue]::Success()
-    } else {
+    }
+    else {
       if (Test-String -not $script:PublisherSupportUrl -MaxLength $Patterns.GenericUrlMaxLength -AllowNull) {
         $script:_returnValue = [ReturnValue]::LengthError(1, $Patterns.GenericUrlMaxLength)
-      } elseif (Test-String -not $script:PublisherSupportUrl -MatchPattern $Patterns.GenericUrl) {
+      }
+      elseif (Test-String -not $script:PublisherSupportUrl -MatchPattern $Patterns.GenericUrl) {
         $script:_returnValue = [ReturnValue]::PatternError()
-      } else {
+      }
+      else {
         $script:_returnValue = [ReturnValue]::GenericError()
       }
     }
@@ -1725,12 +1834,15 @@ Function Read-LocaleMetadata {
 
     if (Test-String $script:PrivacyUrl -MaxLength $Patterns.GenericUrlMaxLength -MatchPattern $Patterns.GenericUrl -AllowNull) {
       $script:_returnValue = [ReturnValue]::Success()
-    } else {
+    }
+    else {
       if (Test-String -not $script:PrivacyUrl -MaxLength $Patterns.GenericUrlMaxLength -AllowNull) {
         $script:_returnValue = [ReturnValue]::LengthError(1, $Patterns.GenericUrlMaxLength)
-      } elseif (Test-String -not $script:PrivacyUrl -MatchPattern $Patterns.GenericUrl) {
+      }
+      elseif (Test-String -not $script:PrivacyUrl -MatchPattern $Patterns.GenericUrl) {
         $script:_returnValue = [ReturnValue]::PatternError()
-      } else {
+      }
+      else {
         $script:_returnValue = [ReturnValue]::GenericError()
       }
     }
@@ -1746,7 +1858,8 @@ Function Read-LocaleMetadata {
 
     if (Test-String $script:Author -MinLength $Patterns.AuthorMinLength -MaxLength $Patterns.AuthorMaxLength -AllowNull) {
       $script:_returnValue = [ReturnValue]::Success()
-    } else {
+    }
+    else {
       $script:_returnValue = [ReturnValue]::LengthError($Patterns.AuthorMinLength, $Patterns.AuthorMaxLength)
     }
   } until ($script:_returnValue.StatusCode -eq [ReturnValue]::Success().StatusCode)
@@ -1760,12 +1873,15 @@ Function Read-LocaleMetadata {
     if (Test-String -not $NewPackageUrl -IsNull) { $script:PackageUrl = $NewPackageUrl }
     if (Test-String $script:PackageUrl -MaxLength $Patterns.GenericUrlMaxLength -MatchPattern $Patterns.GenericUrl -AllowNull) {
       $script:_returnValue = [ReturnValue]::Success()
-    } else {
+    }
+    else {
       if (Test-String -not $script:PackageUrl -MaxLength $Patterns.GenericUrlMaxLength -AllowNull) {
         $script:_returnValue = [ReturnValue]::LengthError(1, $Patterns.GenericUrlMaxLength)
-      } elseif (Test-String -not $script:PackageUrl -MatchPattern $Patterns.GenericUrl) {
+      }
+      elseif (Test-String -not $script:PackageUrl -MatchPattern $Patterns.GenericUrl) {
         $script:_returnValue = [ReturnValue]::PatternError()
-      } else {
+      }
+      else {
         $script:_returnValue = [ReturnValue]::GenericError()
       }
     }
@@ -1776,7 +1892,8 @@ Function Read-LocaleMetadata {
     Write-Host -ForegroundColor 'Red' $script:_returnValue.ErrorString()
     if (Test-String $script:License -IsNull) {
       Write-Host -ForegroundColor 'Green' -Object '[Required] Enter the application License. For example: MIT, GPL, Freeware, Proprietary'
-    } else {
+    }
+    else {
       Write-Host -ForegroundColor 'Yellow' -Object '[Optional] Enter the application License. For example: MIT, GPL, Freeware, Proprietary'
       Write-Host -ForegroundColor 'DarkGray' "Old Variable: $script:License"
     }
@@ -1784,9 +1901,11 @@ Function Read-LocaleMetadata {
     if (Test-String -not $NewLicense -IsNull) { $script:License = $NewLicense }
     if (Test-String $script:License -MinLength $Patterns.LicenseMinLength -MaxLength $Patterns.LicenseMaxLength -NotNull) {
       $script:_returnValue = [ReturnValue]::Success()
-    } elseif (Test-String $script:License -IsNull) {
+    }
+    elseif (Test-String $script:License -IsNull) {
       $script:_returnValue = [ReturnValue]::new(400, 'Required Field', 'The value entered cannot be null or empty', 2)
-    } else {
+    }
+    else {
       $script:_returnValue = [ReturnValue]::LengthError($Patterns.LicenseMinLength, $Patterns.LicenseMaxLength)
     }
   } until ($script:_returnValue.StatusCode -eq [ReturnValue]::Success().StatusCode)
@@ -1801,12 +1920,15 @@ Function Read-LocaleMetadata {
 
     if (Test-String $script:LicenseUrl -MaxLength $Patterns.GenericUrlMaxLength -MatchPattern $Patterns.GenericUrl -AllowNull) {
       $script:_returnValue = [ReturnValue]::Success()
-    } else {
+    }
+    else {
       if (Test-String -not $script:LicenseUrl -MaxLength $Patterns.GenericUrlMaxLength -AllowNull) {
         $script:_returnValue = [ReturnValue]::LengthError(1, $Patterns.GenericUrlMaxLength)
-      } elseif (Test-String -not $script:LicenseUrl -MatchPattern $Patterns.GenericUrl) {
+      }
+      elseif (Test-String -not $script:LicenseUrl -MatchPattern $Patterns.GenericUrl) {
         $script:_returnValue = [ReturnValue]::PatternError()
-      } else {
+      }
+      else {
         $script:_returnValue = [ReturnValue]::GenericError()
       }
     }
@@ -1822,7 +1944,8 @@ Function Read-LocaleMetadata {
     if (Test-String -not $NewCopyright -IsNull) { $script:Copyright = $NewCopyright }
     if (Test-String $script:Copyright -MinLength $Patterns.CopyrightMinLength -MaxLength $Patterns.CopyrightMaxLength -AllowNull) {
       $script:_returnValue = [ReturnValue]::Success()
-    } else {
+    }
+    else {
       $script:_returnValue = [ReturnValue]::LengthError($Patterns.CopyrightMinLength, $Patterns.CopyrightMaxLength)
     }
   } until ($script:_returnValue.StatusCode -eq [ReturnValue]::Success().StatusCode)
@@ -1836,12 +1959,15 @@ Function Read-LocaleMetadata {
     if (Test-String -not $NewCopyrightUrl -IsNull) { $script:CopyrightUrl = $NewCopyrightUrl }
     if (Test-String $script:CopyrightUrl -MaxLength $Patterns.GenericUrlMaxLength -MatchPattern $Patterns.GenericUrl -AllowNull) {
       $script:_returnValue = [ReturnValue]::Success()
-    } else {
+    }
+    else {
       if (Test-String -not $script:CopyrightUrl -MaxLength $Patterns.GenericUrlMaxLength -AllowNull) {
         $script:_returnValue = [ReturnValue]::LengthError(1, $Patterns.GenericUrlMaxLength)
-      } elseif (Test-String -not $script:CopyrightUrl -MatchPattern $Patterns.GenericUrl) {
+      }
+      elseif (Test-String -not $script:CopyrightUrl -MatchPattern $Patterns.GenericUrl) {
         $script:_returnValue = [ReturnValue]::PatternError()
-      } else {
+      }
+      else {
         $script:_returnValue = [ReturnValue]::GenericError()
       }
     }
@@ -1861,7 +1987,8 @@ Function Read-LocaleMetadata {
     if (Test-String -not $NewTags -IsNull) { $script:Tags = $NewTags }
     if (($script:Tags -split ',').Count -le $Patterns.TagsMaxItems) {
       $script:_returnValue = [ReturnValue]::Success()
-    } else {
+    }
+    else {
       $script:_returnValue = [ReturnValue]::MaxItemsError($Patterns.TagsMaxItems)
     }
   } until ($script:_returnValue.StatusCode -eq [ReturnValue]::Success().StatusCode)
@@ -1871,7 +1998,8 @@ Function Read-LocaleMetadata {
     Write-Host -ForegroundColor 'Red' $script:_returnValue.ErrorString()
     if (Test-String $script:ShortDescription -IsNull) {
       Write-Host -ForegroundColor 'Green' -Object '[Required] Enter a short description of the application.'
-    } else {
+    }
+    else {
       Write-Host -ForegroundColor 'Yellow' -Object '[Optional] Enter a short description of the application.'
       Write-Host -ForegroundColor 'DarkGray' "Old Variable: $script:ShortDescription"
     }
@@ -1879,7 +2007,8 @@ Function Read-LocaleMetadata {
     if (Test-String -not $NewShortDescription -IsNull) { $script:ShortDescription = $NewShortDescription }
     if (Test-String $script:ShortDescription -MaxLength $Patterns.ShortDescriptionMaxLength -NotNull) {
       $script:_returnValue = [ReturnValue]::Success()
-    } else {
+    }
+    else {
       $script:_returnValue = [ReturnValue]::LengthError(1, $Patterns.ShortDescriptionMaxLength)
     }
   } until ($script:_returnValue.StatusCode -eq [ReturnValue]::Success().StatusCode)
@@ -1893,7 +2022,8 @@ Function Read-LocaleMetadata {
     if (Test-String -not $NewDescription -IsNull) { $script:Description = $NewDescription }
     if (Test-String $script:Description -MinLength $Patterns.DescriptionMinLength -MaxLength $Patterns.DescriptionMaxLength -AllowNull) {
       $script:_returnValue = [ReturnValue]::Success()
-    } else {
+    }
+    else {
       $script:_returnValue = [ReturnValue]::LengthError($Patterns.DescriptionMinLength, $Patterns.DescriptionMaxLength)
     }
   } until ($script:_returnValue.StatusCode -eq [ReturnValue]::Success().StatusCode)
@@ -1905,7 +2035,8 @@ Function Read-LocaleMetadata {
     $script:ReleaseNotes = Read-Host -Prompt 'ReleaseNotes' | TrimString
     if (Test-String $script:ReleaseNotes -MinLength $Patterns.ReleaseNotesMinLength -MaxLength $Patterns.ReleaseNotesMaxLength -AllowNull) {
       $script:_returnValue = [ReturnValue]::Success()
-    } else {
+    }
+    else {
       $script:_returnValue = [ReturnValue]::LengthError($Patterns.ReleaseNotesMinLength, $Patterns.ReleaseNotesMaxLength)
     }
   } until ($script:_returnValue.StatusCode -eq [ReturnValue]::Success().StatusCode)
@@ -1917,12 +2048,15 @@ Function Read-LocaleMetadata {
     $script:ReleaseNotesUrl = Read-Host -Prompt 'ReleaseNotesUrl' | TrimString
     if (Test-String $script:ReleaseNotesUrl -MaxLength $Patterns.GenericUrlMaxLength -MatchPattern $Patterns.GenericUrl -AllowNull) {
       $script:_returnValue = [ReturnValue]::Success()
-    } else {
+    }
+    else {
       if (Test-String -not $script:ReleaseNotesUrl -MaxLength $Patterns.GenericUrlMaxLength -AllowNull) {
         $script:_returnValue = [ReturnValue]::LengthError(1, $Patterns.GenericUrlMaxLength)
-      } elseif (Test-String -not $script:ReleaseNotesUrl -MatchPattern $Patterns.GenericUrl) {
+      }
+      elseif (Test-String -not $script:ReleaseNotesUrl -MatchPattern $Patterns.GenericUrl) {
         $script:_returnValue = [ReturnValue]::PatternError()
-      } else {
+      }
+      else {
         $script:_returnValue = [ReturnValue]::GenericError()
       }
     }
@@ -1931,12 +2065,12 @@ Function Read-LocaleMetadata {
 
 # Requests the user to answer the prompts found in the winget-pkgs pull request template
 # Uses this template and responses to create a PR
-Function Read-PRBody {
+function Read-PRBody {
   $PrBodyContent = (Get-PrTemplate) -split '\n'
   if (-not $PrBodyContent) {
     Write-Warning "The Pull Request Template Contained No Content!"
   }
-  ForEach ($_line in $PrBodyContent) {
+  foreach ($_line in $PrBodyContent) {
     # | Where-Object { $_ -like '-*[ ]*' }))
     if ($_line -like '-*[ ]*' ) {
       $_showMenu = $true
@@ -1945,7 +2079,8 @@ Function Read-PRBody {
           if ($ScriptSettings.SignedCLA -eq 'true') {
             $PrBodyContent = $PrBodyContent.Replace($_line, $_line.Replace('[ ]', '[x]'))
             $_showMenu = $false
-          } else {
+          }
+          else {
             $_menu = @{
               Prompt        = 'Have you signed the Contributor License Agreement (CLA)?'
               Entries       = @('[Y] Yes'; '*[N] No')
@@ -1970,7 +2105,8 @@ Function Read-PRBody {
           if ($? -and $(Get-Command 'winget' -ErrorAction SilentlyContinue)) {
             $PrBodyContent = $PrBodyContent.Replace($_line, $_line.Replace('[ ]', '[x]'))
             $_showMenu = $false
-          } elseif ($script:Option -ne 'RemoveManifest') {
+          }
+          elseif ($script:Option -ne 'RemoveManifest') {
             $_menu = @{
               Prompt        = "Have you validated your manifest locally with 'winget validate --manifest <path>'?"
               Entries       = @('[Y] Yes'; '*[N] No')
@@ -1978,7 +2114,8 @@ Function Read-PRBody {
               HelpTextColor = 'Red'
               DefaultString = 'N'
             }
-          } else {
+          }
+          else {
             $_showMenu = $false
           }
         }
@@ -1987,7 +2124,8 @@ Function Read-PRBody {
           if ($script:SandboxTest -eq '0') {
             $PrBodyContent = $PrBodyContent.Replace($_line, $_line.Replace('[ ]', '[x]'))
             $_showMenu = $false
-          } elseif ($script:Option -ne 'RemoveManifest') {
+          }
+          elseif ($script:Option -ne 'RemoveManifest') {
             $_menu = @{
               Prompt        = "Have you tested your manifest locally with 'winget install --manifest <path>'?"
               Entries       = @('[Y] Yes'; '*[N] No')
@@ -1995,7 +2133,8 @@ Function Read-PRBody {
               HelpTextColor = 'Red'
               DefaultString = 'N'
             }
-          } else {
+          }
+          else {
             $_showMenu = $false
           }
         }
@@ -2010,7 +2149,8 @@ Function Read-PRBody {
               HelpTextColor = ''
               DefaultString = 'N'
             }
-          } else {
+          }
+          else {
             $_showMenu = $false
           }
         }
@@ -2025,7 +2165,7 @@ Function Read-PRBody {
           $_showMenu = $false
         }
 
-        Default {
+        default {
           $_menu = @{
             Prompt        = $_line.TrimStart('- [ ]')
             Entries       = @('[Y] Yes'; '*[N] No')
@@ -2063,14 +2203,15 @@ Function Read-PRBody {
       $PrBodyContent += @('')
 
       # Validate each of the issues entered by checking the URL to ensure it returns a 200 status code
-      Foreach ($i in ($ResolvedIssues.Split(',').Trim())) {
+      foreach ($i in ($ResolvedIssues.Split(',').Trim())) {
         if ($i.Contains('#')) {
           $_UrlParameters = $i.Split('#')
           switch ($_UrlParameters.Count) {
             2 {
               if ([string]::IsNullOrWhiteSpace($_urlParameters[0])) {
                 $_checkedURL = "https://github.com/microsoft/winget-pkgs/issues/$($_urlParameters[1])"
-              } else {
+              }
+              else {
                 $_checkedURL = "https://github.com/$($_urlParameters[0])/issues/$($_urlParameters[1])"
               }
             }
@@ -2085,7 +2226,8 @@ Function Read-PRBody {
             continue
           }
           $PrBodyContent += @("Resolves $i")
-        } else {
+        }
+        else {
           $_checkedURL = "https://github.com/microsoft/winget-pkgs/issues/$i"
           $_responseCode = Test-Url $_checkedURL
           if ($_responseCode -ne 200) {
@@ -2111,8 +2253,8 @@ Function Read-PRBody {
 }
 
 # Takes a comma separated list of values, converts it to an array object, and adds the result to a specified object-key
-Function Add-YamlListParameter {
-  Param
+function Add-YamlListParameter {
+  param
   (
     [Parameter(Mandatory = $true, Position = 0)]
     [PSCustomObject] $Object,
@@ -2122,15 +2264,15 @@ Function Add-YamlListParameter {
     $Values
   )
   $_Values = @()
-  Foreach ($Value in $Values.Split(',').Trim()) {
+  foreach ($Value in $Values.Split(',').Trim()) {
     $_Values += $Value
   }
   $Object[$Parameter] = $_Values
 }
 
 # Takes a single value and adds it to a specified object-key
-Function Add-YamlParameter {
-  Param
+function Add-YamlParameter {
+  param
   (
     [Parameter(Mandatory = $true, Position = 0)]
     [PSCustomObject] $Object,
@@ -2143,8 +2285,8 @@ Function Add-YamlParameter {
 }
 
 # Fetch the value of a manifest value regardless of which manifest file it exists in
-Function Get-MultiManifestParameter {
-  Param(
+function Get-MultiManifestParameter {
+  param(
     [Parameter(Mandatory = $true, Position = 1)]
     [string] $Parameter
   )
@@ -2152,7 +2294,7 @@ Function Get-MultiManifestParameter {
   return ($_vals -join ', ')
 }
 
-Function Get-DebugString {
+function Get-DebugString {
   $debug = ' $debug='
   $debug += $(switch ($script:Option) {
       'New' { 'NV' }
@@ -2160,29 +2302,29 @@ Function Get-DebugString {
       'EditMetadata' { 'MD' }
       'NewLocale' { 'NL' }
       'Auto' { 'AU' }
-      Default { 'XX' }
+      default { 'XX' }
     })
   $debug += $(
     switch ($script:SaveOption) {
       '0' { 'S0.' }
       '1' { 'S1.' }
       '2' { 'S2.' }
-      Default { 'SU.' }
+      default { 'SU.' }
     }
   )
   $debug += $(switch (([System.Environment]::NewLine).Length) {
       1 { 'LF.' }
       2 { 'CRLF.' }
-      Default { 'XX.' }
+      default { 'XX.' }
     })
-  $debug += $PSVersionTable.PSVersion -Replace '\.', '-'
+  $debug += $PSVersionTable.PSVersion -replace '\.', '-'
   $debug += '.'
   $debug += [System.Environment]::OSVersion.Platform
   return $debug
 }
 
-Function Write-ManifestContent {
-  Param
+function Write-ManifestContent {
+  param
   (
     [Parameter(Mandatory = $true, Position = 0)]
     [string] $FilePath,
@@ -2203,7 +2345,7 @@ Function Write-ManifestContent {
 }
 
 # Take all the entered values and write the version manifest file
-Function Write-VersionManifest {
+function Write-VersionManifest {
   # Create new empty manifest
   [PSCustomObject]$VersionManifest = [ordered]@{}
 
@@ -2216,7 +2358,7 @@ Function Write-VersionManifest {
     'ManifestVersion'   = $ManifestVersion
   }
   foreach ($_Item in $_Singletons.GetEnumerator()) {
-    If ($_Item.Value) { Add-YamlParameter -Object $VersionManifest -Parameter $_Item.Name -Value $_Item.Value }
+    if ($_Item.Value) { Add-YamlParameter -Object $VersionManifest -Parameter $_Item.Name -Value $_Item.Value }
   }
   $VersionManifest = Restore-YamlKeyOrder $VersionManifest $VersionProperties
 
@@ -2229,7 +2371,7 @@ Function Write-VersionManifest {
 }
 
 # Take all the entered values and write the installer manifest file
-Function Write-InstallerManifest {
+function Write-InstallerManifest {
   # If the old manifests exist, copy it so it can be updated in place, otherwise, create a new empty manifest
   if ($script:OldManifestType -eq 'MultiManifest') {
     $InstallerManifest = $script:OldInstallerManifest
@@ -2239,10 +2381,11 @@ Function Write-InstallerManifest {
   #Add the properties to the manifest
   Add-YamlParameter -Object $InstallerManifest -Parameter 'PackageIdentifier' -Value $PackageIdentifier
   Add-YamlParameter -Object $InstallerManifest -Parameter 'PackageVersion' -Value $PackageVersion
-  If ($MinimumOSVersion) {
+  if ($MinimumOSVersion) {
     $InstallerManifest['MinimumOSVersion'] = $MinimumOSVersion
-  } Else {
-    If ($InstallerManifest['MinimumOSVersion']) { $_InstallerManifest.Remove('MinimumOSVersion') }
+  }
+  else {
+    if ($InstallerManifest['MinimumOSVersion']) { $_InstallerManifest.Remove('MinimumOSVersion') }
   }
 
   $_ListSections = [ordered]@{
@@ -2253,14 +2396,16 @@ Function Write-InstallerManifest {
     'InstallModes'          = $InstallModes
   }
   foreach ($Section in $_ListSections.GetEnumerator()) {
-    If ($Section.Value) { Add-YamlListParameter -Object $InstallerManifest -Parameter $Section.Name -Values $Section.Value }
+    if ($Section.Value) { Add-YamlListParameter -Object $InstallerManifest -Parameter $Section.Name -Values $Section.Value }
   }
 
   if ($Option -ne 'EditMetadata') {
     $InstallerManifest['Installers'] = $script:Installers
-  } elseif ($script:OldInstallerManifest) {
+  }
+  elseif ($script:OldInstallerManifest) {
     $InstallerManifest['Installers'] = $script:OldInstallerManifest['Installers']
-  } else {
+  }
+  else {
     $InstallerManifest['Installers'] = $script:OldVersionManifest['Installers']
   }
 
@@ -2270,7 +2415,8 @@ Function Write-InstallerManifest {
       try {
         Get-Date([datetime]$($_Installer['ReleaseDate'])) -f 'yyyy-MM-dd' -OutVariable _ValidDate | Out-Null
         if ($_ValidDate) { $_Installer['ReleaseDate'] = $_ValidDate | TrimString }
-      } catch {
+      }
+      catch {
         # Release date isn't valid
         $_Installer.Remove('ReleaseDate')
       }
@@ -2279,7 +2425,7 @@ Function Write-InstallerManifest {
 
   Add-YamlParameter -Object $InstallerManifest -Parameter 'ManifestType' -Value 'installer'
   Add-YamlParameter -Object $InstallerManifest -Parameter 'ManifestVersion' -Value $ManifestVersion
-  If ($InstallerManifest['Dependencies']) {
+  if ($InstallerManifest['Dependencies']) {
     $InstallerManifest['Dependencies'] = Restore-YamlKeyOrder $InstallerManifest['Dependencies'] $InstallerDependencyProperties -NoComments
   }
   # Move Installer Level Keys to Manifest Level
@@ -2313,7 +2459,8 @@ Function Write-InstallerManifest {
             }
           }
         }
-      } else {
+      }
+      else {
         # Check if all installers are the same
         $_AllAreSame = $true
         $_FirstInstallerKeyValue = ConvertTo-Json($InstallerManifest.Installers[0].$_Key)
@@ -2353,7 +2500,7 @@ Function Write-InstallerManifest {
 }
 
 # Take all the entered values and write the locale manifest file
-Function Write-LocaleManifest {
+function Write-LocaleManifest {
   # If the old manifests exist, copy it so it can be updated in place, otherwise, create a new empty manifest
   if ($script:OldManifestType -eq 'MultiManifest') {
     $LocaleManifest = $script:OldLocaleManifest
@@ -2382,12 +2529,12 @@ Function Write-LocaleManifest {
     'ReleaseNotesUrl'     = $ReleaseNotesUrl
   }
   foreach ($_Item in $_Singletons.GetEnumerator()) {
-    If ($_Item.Value) { Add-YamlParameter -Object $LocaleManifest -Parameter $_Item.Name -Value $_Item.Value }
+    if ($_Item.Value) { Add-YamlParameter -Object $LocaleManifest -Parameter $_Item.Name -Value $_Item.Value }
   }
 
-  If ($Tags) { Add-YamlListParameter -Object $LocaleManifest -Parameter 'Tags' -Values $Tags }
-  If (!$LocaleManifest.ManifestType) { $LocaleManifest['ManifestType'] = 'defaultLocale' }
-  If ($Moniker -and $($LocaleManifest.ManifestType -eq 'defaultLocale')) { Add-YamlParameter -Object $LocaleManifest -Parameter 'Moniker' -Value $Moniker }
+  if ($Tags) { Add-YamlListParameter -Object $LocaleManifest -Parameter 'Tags' -Values $Tags }
+  if (!$LocaleManifest.ManifestType) { $LocaleManifest['ManifestType'] = 'defaultLocale' }
+  if ($Moniker -and $($LocaleManifest.ManifestType -eq 'defaultLocale')) { Add-YamlParameter -Object $LocaleManifest -Parameter 'Moniker' -Value $Moniker }
   Add-YamlParameter -Object $LocaleManifest -Parameter 'ManifestVersion' -Value $ManifestVersion
 
   # Clean up the existing files just in case
@@ -2412,7 +2559,7 @@ Function Write-LocaleManifest {
 
   # Copy over all locale files from previous version that aren't the same
   if ($OldManifests) {
-    ForEach ($DifLocale in $OldManifests) {
+    foreach ($DifLocale in $OldManifests) {
       if ($DifLocale.Name -notin @("$PackageIdentifier.yaml", "$PackageIdentifier.installer.yaml", "$PackageIdentifier.locale.$PackageLocale.yaml")) {
         if (!(Test-Path $AppFolder)) { New-Item -ItemType 'Directory' -Force -Path $AppFolder | Out-Null }
         $script:OldLocaleManifest = ConvertFrom-Yaml -Yaml ($(Get-Content -Path $DifLocale.FullName -Encoding UTF8) -join "`n") -Ordered
@@ -2435,7 +2582,7 @@ Function Write-LocaleManifest {
 
 function Remove-ManifestVersion {
   [CmdletBinding(SupportsShouldProcess)]
-  Param(
+  param(
     [Parameter(Mandatory = $true, Position = 1)]
     [string] $PathToVersion
   )
@@ -2453,14 +2600,16 @@ function Remove-ManifestVersion {
 # Set the root folder where new manifests should be created
 if (Test-Path -Path "$PSScriptRoot\..\manifests") {
   $ManifestsFolder = (Resolve-Path "$PSScriptRoot\..\manifests").Path
-} else {
+}
+else {
   $ManifestsFolder = (Resolve-Path '.\').Path
 }
 
 # Set the root folder where new font manifests should be created
 if (Test-Path -Path "$PSScriptRoot\..\fonts") {
   $FontsFolder = (Resolve-Path "$PSScriptRoot\..\fonts").Path
-} else {
+}
+else {
   $FontsFolder = (Resolve-Path '.\').Path
 }
 
@@ -2474,7 +2623,8 @@ if (!$script:UsingAdvancedOption) {
   Clear-Host
   if ($Mode -in 1..6) {
     $UserChoice = $Mode
-  } else {
+  }
+  else {
     Write-Host @"
 ${vtForegroundYellow} Select Mode:
   ${vtForegroundCyan}[${vtForegroundWhite}1${vtForegroundCyan}] New Manifest or Package Version
@@ -2486,7 +2636,7 @@ ${vtForegroundYellow} Select Mode:
   ${vtForegroundCyan}[${vtForegroundWhite}Q${vtForegroundCyan}] ${vtForegroundRed}Any key to quit
   ${vtForegroundDefault}
 "@
-    Write-Host "Selection: " -NoNewLine
+    Write-Host "Selection: " -NoNewline
 
     # Listen for keypress and set operation mode based on keypress
     $Keys = @{
@@ -2522,7 +2672,8 @@ ${vtForegroundYellow} Select Mode:
       exit
     }
   }
-} else {
+}
+else {
   if ($AutoUpgrade) { $script:Option = 'Auto' }
 }
 
@@ -2572,7 +2723,8 @@ if (($script:Option -eq 'MovePackageIdentifier')) {
         $FromAppFolder = Join-Path $ManifestsFolder -ChildPath $OldPackageIdentifier.ToLower().Chars(0) | Join-Path -ChildPath $OldPackageIdentifier.Replace('.', $([IO.Path]::DirectorySeparatorChar))
         if (!(Test-Path -Path "$FromAppFolder")) {
           Write-Host -ForegroundColor 'Red' -Object "No manifests found for $OldPackageIdentifier"
-        } else {
+        }
+        else {
           $manifestsExist = $true
           Write-Host
         }
@@ -2592,7 +2744,8 @@ if (($script:Option -eq 'MovePackageIdentifier')) {
         $NewMoniker = Read-Host -Prompt 'Moniker' | ToLower | TrimString | NoWhitespace
         if (Test-String $NewMoniker -MaxLength $Patterns.MonikerMaxLength -AllowNull) {
           $script:_returnValue = [ReturnValue]::Success()
-        } else {
+        }
+        else {
           $script:_returnValue = [ReturnValue]::LengthError(1, $Patterns.MonikerMaxLength)
         }
       } until ($script:_returnValue.StatusCode -eq [ReturnValue]::Success().StatusCode)
@@ -2683,12 +2836,15 @@ do {
   }
   if (Test-String $PackageVersion -MaxLength $Patterns.VersionMaxLength -MatchPattern $Patterns.PackageVersion -NotNull) {
     $script:_returnValue = [ReturnValue]::Success()
-  } else {
+  }
+  else {
     if (Test-String -not $PackageVersion -MaxLength $Patterns.VersionMaxLength -NotNull) {
       $script:_returnValue = [ReturnValue]::LengthError(1, $Patterns.VersionMaxLength)
-    } elseif (Test-String -not $PackageVersion -MatchPattern $Patterns.PackageVersion) {
+    }
+    elseif (Test-String -not $PackageVersion -MatchPattern $Patterns.PackageVersion) {
       $script:_returnValue = [ReturnValue]::PatternError()
-    } else {
+    }
+    else {
       $script:_returnValue = [ReturnValue]::GenericError()
     }
   }
@@ -2734,7 +2890,8 @@ if (Test-Path -Path (Split-Path $script:AppFolder)) {
 if (Test-Path -Path (Split-Path $script:FontFolder)) {
   if ($script:DestinationFolder) {
     $script:DestinationFolder = @($script:DestinationFolder; $script:FontFolder)
-  } else {
+  }
+  else {
     $script:DestinationFolder = $script:FontFolder
   }
 }
@@ -2748,7 +2905,8 @@ if ($script:DestinationFolder -and $script:DestinationFolder.Count -gt 1) {
     '1' { $script:AppFolder = $script:AppFolder }
     '2' { $script:AppFolder = $script:FontFolder }
   }
-} elseif ($script:DestinationFolder -and $script:DestinationFolder.Count -eq 1) {
+}
+elseif ($script:DestinationFolder -and $script:DestinationFolder.Count -eq 1) {
   $script:AppFolder = $script:DestinationFolder
 }
 
@@ -2758,7 +2916,8 @@ if ($script:Option -in @('NewLocale'; 'EditMetadata'; 'RemoveManifest')) {
   if (Test-Path -Path "$AppFolder\..\$PackageVersion") {
     $script:OldManifests = Get-ChildItem -Path "$AppFolder\..\$PackageVersion"
     $LastVersion = $PackageVersion
-  } elseif (Test-Path -Path "$FontFolder\..\$PackageVersion") {
+  }
+  elseif (Test-Path -Path "$FontFolder\..\$PackageVersion") {
     $script:OldManifests = Get-ChildItem -Path "$FontFolder\..\$PackageVersion"
     $LastVersion = $PackageVersion
     # Intentionally override AppFolder here to ensure the rest of the script works as expected
@@ -2775,7 +2934,8 @@ if ($script:Option -in @('NewLocale'; 'EditMetadata'; 'RemoveManifest')) {
     if (Test-Path -Path "$AppFolder\..\$PromptVersion") {
       $script:OldManifests = Get-ChildItem -Path "$AppFolder\..\$PromptVersion"
       $script:AppFolder = Join-Path (Split-Path $AppFolder) -ChildPath $LastVersion
-    } elseif (Test-Path -Path "$FontFolder\..\$PromptVersion") {
+    }
+    elseif (Test-Path -Path "$FontFolder\..\$PromptVersion") {
       $script:OldManifests = Get-ChildItem -Path "$FontFolder\..\$PromptVersion"
       # Intentionally use AppFolder here to ensure the rest of the script works as expected
       $script:AppFolder = Join-Path (Split-Path $FontFolder) -ChildPath $LastVersion
@@ -2804,7 +2964,8 @@ if (!$LastVersion) {
     if ($script:Option -eq 'Auto' -and $PackageVersion -in $script:ExistingVersions) { $LastVersion = $PackageVersion }
     Write-Host -ForegroundColor 'DarkYellow' -Object "Found Existing Version: $LastVersion"
     $script:OldManifests = Get-ChildItem -Path "$AppFolder\..\$LastVersion"
-  } catch {
+  }
+  catch {
     # Take no action here, we just want to catch the exceptions as a precaution
     Out-Null
   }
@@ -2840,7 +3001,8 @@ if ($OldManifests.Name -eq "$PackageIdentifier.installer.yaml" -and $OldManifest
         }
         $script:OldInstallerManifest.Remove($_Key)
         continue
-      } else {
+      }
+      else {
         foreach ($_Installer in $script:OldInstallerManifest['Installers']) {
           if ($_Key -eq 'InstallModes') { $script:InstallModes = [string]$script:OldInstallerManifest.$_Key }
           if ($_Key -notin $_Installer.Keys) {
@@ -2854,7 +3016,8 @@ if ($OldManifests.Name -eq "$PackageIdentifier.installer.yaml" -and $OldManifest
   }
   $script:OldLocaleManifest = ConvertFrom-Yaml -Yaml ($(Get-Content -Path $(Resolve-Path "$AppFolder\..\$LastVersion\$PackageIdentifier.locale.$PackageLocale.yaml") -Encoding UTF8) -join "`n") -Ordered
   $script:OldVersionManifest = ConvertFrom-Yaml -Yaml ($(Get-Content -Path $(Resolve-Path "$AppFolder\..\$LastVersion\$PackageIdentifier.yaml") -Encoding UTF8) -join "`n") -Ordered
-} elseif ($OldManifests.Name -eq "$PackageIdentifier.yaml") {
+}
+elseif ($OldManifests.Name -eq "$PackageIdentifier.yaml") {
   if ($script:Option -eq 'NewLocale') { throw [ManifestException]::new('MultiManifest Required') }
   $script:OldManifestType = 'MultiManifest'
   $script:OldSingletonManifest = ConvertFrom-Yaml -Yaml ($(Get-Content -Path $(Resolve-Path "$AppFolder\..\$LastVersion\$PackageIdentifier.yaml") -Encoding UTF8) -join "`n") -Ordered
@@ -2894,7 +3057,8 @@ if ($OldManifests.Name -eq "$PackageIdentifier.installer.yaml" -and $OldManifest
         }
         $script:OldInstallerManifest.Remove($_Key)
         continue
-      } else {
+      }
+      else {
         foreach ($_Installer in $script:OldInstallerManifest['Installers']) {
           if ($_Key -eq 'InstallModes') { $script:InstallModes = [string]$script:OldInstallerManifest.$_Key }
           if ($_Key -notin $_Installer.Keys) {
@@ -2906,7 +3070,8 @@ if ($OldManifests.Name -eq "$PackageIdentifier.installer.yaml" -and $OldManifest
       $script:OldInstallerManifest.Remove($_Key)
     }
   }
-} else {
+}
+else {
   if ($script:Option -ne 'New') { throw [ManifestException]::new("Version $LastVersion does not contain the required manifests") }
   $script:OldManifestType = 'None'
 }
@@ -2931,7 +3096,7 @@ if ($OldManifests -and $Option -ne 'NewLocale') {
     'InstallerSuccessCodes'
     'Capabilities'; 'RestrictedCapabilities'
   )
-  Foreach ($param in $_Parameters) {
+  foreach ($param in $_Parameters) {
     $_ReadValue = $(if ($script:OldManifestType -eq 'MultiManifest') { (Get-MultiManifestParameter $param) } else { $script:OldVersionManifest[$param] })
     if (Test-String -Not $_ReadValue -IsNull) { New-Variable -Name $param -Value $_ReadValue -Scope Script -Force }
   }
@@ -2943,7 +3108,7 @@ if ($OldManifests) {
 }
 
 # Run the data entry and creation of manifests appropriate to the option the user selected
-Switch ($script:Option) {
+switch ($script:Option) {
   'QuickUpdateVersion' {
     Read-QuickInstallerEntry
     Write-LocaleManifest
@@ -3000,7 +3165,8 @@ Switch ($script:Option) {
       # Check the reason for validity. The length requirements are arbitrary, but they have been set to encourage concise yet meaningful reasons
       if (Test-String $script:RemovalReason -MinLength 8 -MaxLength 128 -NotNull) {
         $script:_returnValue = [ReturnValue]::Success()
-      } else {
+      }
+      else {
         $script:_returnValue = [ReturnValue]::LengthError(8, 128)
       }
     } until ($script:_returnValue.StatusCode -eq [ReturnValue]::Success().StatusCode)
@@ -3023,7 +3189,8 @@ Switch ($script:Option) {
       $_Installer['InstallerUrl'] = $_Installer.InstallerUrl.Replace(' ', '%20')
       try {
         $script:dest = Get-InstallerFile -URI $_Installer.InstallerUrl -PackageIdentifier $PackageIdentifier -PackageVersion $PackageVersion
-      } catch {
+      }
+      catch {
         # Here we also want to pass any exceptions through for potential debugging
         throw [System.Net.WebException]::new('The file could not be downloaded. Try running the script again', $_.Exception)
       }
@@ -3039,12 +3206,14 @@ Switch ($script:Option) {
       $MSIProductCode = $null
       if ([System.Environment]::OSVersion.Platform -match 'Win' -and ($script:dest).EndsWith('.msi')) {
         $MSIProductCode = [string](Get-MSIProperty -Path $script:dest -Property 'ProductCode').Value
-      } elseif ([System.Environment]::OSVersion.Platform -match 'Unix' -and (Get-Item $script:dest).Name.EndsWith('.msi')) {
+      }
+      elseif ([System.Environment]::OSVersion.Platform -match 'Unix' -and (Get-Item $script:dest).Name.EndsWith('.msi')) {
         $MSIProductCode = ([string](file $script:dest) | Select-String -Pattern '{[A-Z0-9]{8}-([A-Z0-9]{4}-){3}[A-Z0-9]{12}}').Matches.Value
       }
       if (Test-String -not $MSIProductCode -IsNull) {
         $_Installer['ProductCode'] = $MSIProductCode
-      } elseif ( ($_Installer.Keys -contains 'ProductCode') -and ($_Installer.InstallerType -in @('appx'; 'msi'; 'msix'; 'wix'; 'burn'))) {
+      }
+      elseif ( ($_Installer.Keys -contains 'ProductCode') -and ($_Installer.InstallerType -in @('appx'; 'msi'; 'msix'; 'wix'; 'burn'))) {
         $_Installer.Remove('ProductCode')
       }
       # If the installer is msix or appx, try getting the new SignatureSha256
@@ -3055,7 +3224,8 @@ Switch ($script:Option) {
       }
       if (Test-String -not $NewSignatureSha256 -IsNull) {
         $_Installer['SignatureSha256'] = $NewSignatureSha256
-      } elseif ($_Installer.Keys -contains 'SignatureSha256') {
+      }
+      elseif ($_Installer.Keys -contains 'SignatureSha256') {
         $_Installer.Remove('SignatureSha256')
       }
       # If the installer is msix or appx, try getting the new package family name
@@ -3065,7 +3235,8 @@ Switch ($script:Option) {
 
         if (Test-String $PackageFamilyName -MatchPattern $Patterns.FamilyName) {
           $_Installer['PackageFamilyName'] = $PackageFamilyName
-        } elseif ($_NewInstaller.Keys -contains 'PackageFamilyName') {
+        }
+        elseif ($_NewInstaller.Keys -contains 'PackageFamilyName') {
           $_Installer.Remove('PackageFamilyName')
         }
       }
@@ -3110,7 +3281,8 @@ if ($script:Option -ne 'RemoveManifest') {
     if ($script:SandboxTest -eq '0') {
       if (Test-Path -Path "$gitTopLevel\Tools\SandboxTest.ps1") {
         $SandboxScriptPath = (Resolve-Path "$gitTopLevel\Tools\SandboxTest.ps1").Path
-      } else {
+      }
+      else {
         while ([string]::IsNullOrWhiteSpace($SandboxScriptPath)) {
           Write-Host
           Write-Host -ForegroundColor 'Green' -Object 'SandboxTest.ps1 not found, input path'
@@ -3119,7 +3291,8 @@ if ($script:Option -ne 'RemoveManifest') {
       }
       if ($script:UsesPrerelease) {
         & $SandboxScriptPath -Manifest $AppFolder -Prerelease -EnableExperimentalFeatures
-      } else {
+      }
+      else {
         & $SandboxScriptPath -Manifest $AppFolder
       }
     }
@@ -3166,7 +3339,8 @@ if ($PromptSubmit -eq '0') {
   $_previousConfig = git config --get core.safecrlf
   if ($_previousConfig) {
     git config --replace core.safecrlf false
-  } else {
+  }
+  else {
     git config --add core.safecrlf false
   }
 
@@ -3192,11 +3366,13 @@ if ($PromptSubmit -eq '0') {
   # Restore the user's previous git settings to ensure we don't disrupt their normal flow
   if ($_previousConfig) {
     git config --replace core.safecrlf $_previousConfig
-  } else {
+  }
+  else {
     git config --unset core.safecrlf
   }
 
-} else {
+}
+else {
   Write-Host
   Invoke-CleanExit
 }
@@ -3204,19 +3380,19 @@ if ($PromptSubmit -eq '0') {
 [Threading.Thread]::CurrentThread.CurrentCulture = $callingCulture
 
 # Error levels for the ReturnValue class
-Enum ErrorLevel {
+enum ErrorLevel {
   Undefined = -1
-  Info = 0
-  Warning = 1
-  Error = 2
-  Critical = 3
+  Info      = 0
+  Warning   = 1
+  Error     = 2
+  Critical  = 3
 }
 
 # Custom class for validation and error checking
 # `200` should be indicative of a success
 # `400` should be indicative of a bad request
 # `500` should be indicative of an internal error / other error
-Class ReturnValue {
+class ReturnValue {
   [int] $StatusCode
   [string] $Title
   [string] $Message
@@ -3284,7 +3460,8 @@ Class ReturnValue {
   [string] ErrorString() {
     if ($this.StatusCode -eq 200) {
       return $null
-    } else {
+    }
+    else {
       return "[$($this.Severity)] $($this.Title) - $($this.Message)`n"
     }
   }
