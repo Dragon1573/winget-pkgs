@@ -8,11 +8,11 @@
 ###
 
 [CmdletBinding()]
-Param(
+param(
     # Manifest
     [Parameter(Position = 0, HelpMessage = 'The Manifest to install in the Sandbox.')]
     [ValidateScript({
-            if (-Not (Test-Path -Path $_)) { throw "$_ does not exist" }
+            if (-not (Test-Path -Path $_)) { throw "$_ does not exist" }
             return $true
         })]
     [String] $Manifest,
@@ -22,7 +22,7 @@ Param(
     # MapFolder
     [Parameter(HelpMessage = 'The folder to map in the Sandbox.')]
     [ValidateScript({
-            if (-Not (Test-Path -Path $_ -PathType Container)) { throw "$_ is not a folder." }
+            if (-not (Test-Path -Path $_ -PathType Container)) { throw "$_ is not a folder." }
             return $true
         })]
     [String] $MapFolder = $pwd,
@@ -50,7 +50,8 @@ $ErrorActionPreference = 'Stop' # This gets overridden most places, but is set e
 if ($PSBoundParameters.Keys -notcontains 'InformationAction') { $InformationPreference = 'Continue' } # If the user didn't explicitly set an InformationAction, Override their preference
 if ($PSBoundParameters.Keys -contains 'WarningAction') {
     $script:OnMappedFolderWarning = $PSBoundParameters.WarningAction
-} else {
+}
+else {
     $script:OnMappedFolderWarning = 'Inquire'
 }
 $script:UseNuGetForMicrosoftUIXaml = $false
@@ -165,7 +166,7 @@ function Initialize-Folder {
 ####
 function Get-Release {
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingConvertToSecureStringWithPlainText', '',
-        Justification='The standard workflow that users use with other applications requires the use of plaintext GitHub Access Tokens')]
+        Justification = 'The standard workflow that users use with other applications requires the use of plaintext GitHub Access Tokens')]
 
     param (
         [Parameter()]
@@ -222,7 +223,8 @@ function Get-RemoteContent {
     # If the URL is null, return a status code of 400
     if ([String]::IsNullOrWhiteSpace($URL)) {
         $response = @{ StatusCode = 400 }
-    } else {
+    }
+    else {
         $response = Invoke-WebRequest -Uri $URL -Method Head -ErrorAction SilentlyContinue
     }
     if ($response.StatusCode -ne 200) {
@@ -232,7 +234,8 @@ function Get-RemoteContent {
     # If a path was specified, store it at that path; Otherwise use the temp folder
     if ($OutputPath) {
         $localFile = [System.IO.FileInfo]::new($OutputPath)
-    } else {
+    }
+    else {
         $localFile = New-TemporaryFile
     }
     Write-Debug "Remote content will be stored at $($localFile.FullName)"
@@ -251,7 +254,8 @@ function Get-RemoteContent {
     # If the raw content was requested, return the content, otherwise, return the FileInfo object
     if ($Raw) {
         return Get-Content -Path $localFile.FullName
-    } else {
+    }
+    else {
         return $localFile
     }
 }
@@ -347,7 +351,7 @@ function Test-FileChecksum {
 ####
 function Test-GithubToken {
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingConvertToSecureStringWithPlainText', '',
-        Justification='The standard workflow that users use with other applications requires the use of plaintext GitHub Access Tokens')]
+        Justification = 'The standard workflow that users use with other applications requires the use of plaintext GitHub Access Tokens')]
 
     param (
         [Parameter(Mandatory = $true)]
@@ -458,16 +462,17 @@ function Test-GithubToken {
     Write-Verbose 'Token validated successfully. Adding to cache'
     # Trim off any non-digit characters from the end
     # Strip off the array wrapper since it is no longer needed
-    $tokenExpiration = $tokenExpiration[0] -replace '[^0-9]+$',''
+    $tokenExpiration = $tokenExpiration[0] -replace '[^0-9]+$', ''
     # If the token doesn't expire, write a special value to the file
     if (!$tokenExpiration -or [string]::IsNullOrWhiteSpace($tokenExpiration)) {
         Write-Debug "Token expiration was empty, setting it to maximum"
         $tokenExpiration = [System.DateTime]::MaxValue
     }
     # Try parsing the value to a datetime before storing it
-    if ([DateTime]::TryParse($tokenExpiration,[ref]$tokenExpiration)) {
+    if ([DateTime]::TryParse($tokenExpiration, [ref]$tokenExpiration)) {
         Write-Debug "Token expiration successfully parsed as DateTime ($tokenExpiration)"
-    } else {
+    }
+    else {
         # TryParse Failed
         Write-Warning "Could not parse expiration date as a DateTime object. It will be set to the minimum value"
         $tokenExpiration = [System.DateTime]::MinValue
@@ -483,7 +488,7 @@ function Test-GithubToken {
 #### Start of main script ####
 
 # Check if Windows Sandbox is enabled
-if (-Not (Get-Command 'WindowsSandbox' -ErrorAction SilentlyContinue)) {
+if (-not (Get-Command 'WindowsSandbox' -ErrorAction SilentlyContinue)) {
     Write-Error -ErrorAction Continue -Category NotInstalled -Message @'
 Windows Sandbox does not seem to be available. Check the following URL for prerequisites and further details:
 https://docs.microsoft.com/windows/security/threat-protection/windows-sandbox/windows-sandbox-overview
@@ -503,18 +508,18 @@ if (!$SkipManifestValidation -and ![String]::IsNullOrWhiteSpace($Manifest)) {
     }
     Write-Information "--> Validating Manifest"
     $validateCommandOutput =
-        & {
-            # Store current output encoding setting
-            $prevOutEnc = [Console]::OutputEncoding
-            # Set [Console]::OutputEncoding to UTF-8 since winget uses UTF-8 for output
-            [Console]::OutputEncoding = $OutputEncoding = [System.Text.Utf8Encoding]::new()
+    & {
+        # Store current output encoding setting
+        $prevOutEnc = [Console]::OutputEncoding
+        # Set [Console]::OutputEncoding to UTF-8 since winget uses UTF-8 for output
+        [Console]::OutputEncoding = $OutputEncoding = [System.Text.Utf8Encoding]::new()
 
-            winget.exe validate $Manifest
+        winget.exe validate $Manifest
 
-            # Reset the encoding to the previous values
-            [Console]::OutputEncoding = $prevOutEnc
-        }
-        switch ($LASTEXITCODE) {
+        # Reset the encoding to the previous values
+        [Console]::OutputEncoding = $prevOutEnc
+    }
+    switch ($LASTEXITCODE) {
         '-1978335191' {
             # Skip the first line and the empty last line
             $validateCommandOutput | Select-Object -Skip 1 -SkipLast 1 | ForEach-Object {
@@ -532,7 +537,7 @@ if (!$SkipManifestValidation -and ![String]::IsNullOrWhiteSpace($Manifest)) {
             Write-Warning 'Manifest validation succeeded with warnings'
             Start-Sleep -Seconds 5 # Allow the user 5 seconds to read the warnings before moving on
         }
-        Default {
+        default {
             Write-Information $validateCommandOutput.Trim() # On the success, print an empty line after the command output
         }
     }
@@ -712,7 +717,7 @@ $script:SandboxWinGetSettings | ConvertTo-Json | Out-File -FilePath (Join-Path -
 foreach ($dependency in $script:AppInstallerDependencies) { Copy-Item -Path $dependency.SaveTo -Destination $script:TestDataFolder -ErrorAction SilentlyContinue }
 
 # Create a script file from the script parameter
-if (-Not [String]::IsNullOrWhiteSpace($Script)) {
+if (-not [String]::IsNullOrWhiteSpace($Script)) {
     Write-Verbose "Creating script file from 'Script' argument"
     $Script | Out-File -Path (Join-Path $script:TestDataFolder -ChildPath 'BoundParameterScript.ps1')
 }
@@ -860,7 +865,7 @@ Write-Information @"
     - Configuring Winget
 "@
 
-if (-Not [String]::IsNullOrWhiteSpace($Manifest)) {
+if (-not [String]::IsNullOrWhiteSpace($Manifest)) {
     Write-Information @"
       - Installing the Manifest $(Split-Path $Manifest -Leaf)
       - Refreshing environment variables
@@ -868,7 +873,7 @@ if (-Not [String]::IsNullOrWhiteSpace($Manifest)) {
 "@
 }
 
-if (-Not [String]::IsNullOrWhiteSpace($Script)) {
+if (-not [String]::IsNullOrWhiteSpace($Script)) {
     Write-Information @"
       - Running the following script: {
 $Script
