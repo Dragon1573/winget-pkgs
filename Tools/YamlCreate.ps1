@@ -248,7 +248,6 @@ $callingCulture = [Threading.Thread]::CurrentThread.CurrentCulture
 [Threading.Thread]::CurrentThread.CurrentCulture = 'en-US'
 if (-not ([System.Environment]::OSVersion.Platform -match 'Win')) { $env:TEMP = '/tmp/' }
 $wingetUpstream = 'https://github.com/microsoft/winget-pkgs.git'
-$RunHash = $(Get-FileHash -InputStream $([IO.MemoryStream]::new([byte[]][char[]]$(Get-Date).Ticks.ToString()))).Hash.Substring(0, 8)
 $script:UserAgent = 'Microsoft-Delivery-Optimization/10.1'
 $script:CleanupPaths = @()
 
@@ -2639,6 +2638,19 @@ if (($script:Option -eq 'MovePackageIdentifier')) {
         }
       } until ($script:_returnValue.StatusCode -eq [ReturnValue]::Success().StatusCode)
 
+      # Request the related issue ID, in case the related issue ID needs to be updated.
+      do {
+        Write-Host -ForegroundColor 'Red' $script:_returnValue.ErrorString()
+        Write-Host -ForegroundColor 'Yellow' -Object '[Optional] Enter the related issue ID. For example: 1234'
+        $RelatedIssueID = Read-Host -Prompt 'Related Issue ID' | TrimString | NoWhitespace
+        if (Test-String $RelatedIssueID -MatchPattern '^\d+$' -NotNull) {
+          $script:_returnValue = [ReturnValue]::Success()
+        }
+        else {
+          $script:_returnValue = [ReturnValue]::NumericError
+        }
+      } until ($script:_returnValue.StatusCode -eq [ReturnValue]::Success().StatusCode)
+
       # Get a list of the versions to move
       $VersionsToMove = @(Get-ChildItem -Path $FromAppFolder | Where-Object { @(Get-ChildItem -Directory -Path $_.FullName).Count -eq 0 }).Name
 
@@ -2665,7 +2677,7 @@ if (($script:Option -eq 'MovePackageIdentifier')) {
         git switch -d upstream/master -q
         git add $DestinationFolder
         git commit -m "Move $OldPackageIdentifier $Version to $NewPackageIdentifier $Version" --quiet
-        $BranchName = "Move-$OldPackageIdentifier-v$Version-$RunHash"
+        $BranchName = "issues/$RelatedIssueID/$Version/move"
         git switch -c "$BranchName" --quiet
         git push --set-upstream origin "$BranchName" --quiet
         $BranchesCreated += $BranchName
@@ -2679,7 +2691,7 @@ if (($script:Option -eq 'MovePackageIdentifier')) {
         # Create and push to a new branch
         git add $(Remove-ManifestVersion $SourceFolder)
         git commit -m "Remove $OldPackageIdentifier $Version to $NewPackageIdentifier $Version" --quiet
-        $BranchName = "Remove-$OldPackageIdentifier-v$Version-$RunHash"
+        $BranchName = "issues/$RelatedIssueID/$Version/drop"
         git switch -c "$BranchName" --quiet
         git push --set-upstream origin "$BranchName" --quiet
         $BranchesCreated += $BranchName
@@ -3216,7 +3228,27 @@ if ($PromptSubmit -eq '0') {
   git fetch upstream master --quiet
   git switch -d upstream/master
   if ($LASTEXITCODE -eq '0') {
-    $BranchName = "$PackageIdentifier-$PackageVersion-$RunHash"
+    # Git commits and pushes HAVE TO link to a specific issue.
+    # Request the related issue ID, in case the related issue ID needs to be updated.
+    do {
+      Write-Host -ForegroundColor 'Red' $script:_returnValue.ErrorString()
+      Write-Host -ForegroundColor 'Yellow' -Object '[Optional] Enter the related issue ID. For example: 1234'
+      $RelatedIssueID = Read-Host -Prompt 'Related Issue ID' | TrimString | NoWhitespace
+      if (Test-String $RelatedIssueID -MatchPattern '^\d+$' -NotNull) {
+        $script:_returnValue = [ReturnValue]::Success()
+      }
+      else {
+        $script:_returnValue = [ReturnValue]::NumericError
+      }
+    } until ($script:_returnValue.StatusCode -eq [ReturnValue]::Success().StatusCode)
+
+    $BranchName = "issues/$RelatedIssueID/$PackageIdentifier/$PackageVersion"
+    switch -regex ($CommitType) {
+      'New package' { $BranchName += "/init" }
+      'Remove' { $BranchName += "/drop" }
+      default { $BranchName += "/bump" }
+    }
+
     # Git branch names cannot start with `.` cannot contain any of {`..`, `\`, `~`, `^`, `:`, ` `, `?`, `@{`, `[`}, and cannot end with {`/`, `.lock`, `.`}
     $BranchName = $BranchName -replace '[\~,\^,\:,\\,\?,\@\{,\*,\[,\s]{1,}|[.lock|/|\.]*$|^\.{1,}|\.\.', ''
     git add "$(Join-Path (Get-Item $AppFolder).Parent.FullName -ChildPath '*')"
