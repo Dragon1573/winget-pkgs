@@ -249,6 +249,9 @@ function Get-RemoteContent {
     if ($Raw) {
         $script:CleanupPaths += @($localFile.FullName)
     }
+    else {
+        $script:CleanupPaths += @()
+    }
     try {
         $downloadTask = $script:HttpClient.GetByteArrayAsync($URL)
         [System.IO.File]::WriteAllBytes($localfile.FullName, $downloadTask.Result)
@@ -544,7 +547,7 @@ if (!$SkipManifestValidation -and ![String]::IsNullOrWhiteSpace($Manifest)) {
             Start-Sleep -Seconds 5 # Allow the user 5 seconds to read the warnings before moving on
         }
         default {
-            Write-Information $validateCommandOutput.Trim() # On the success, print an empty line after the command output
+            $validateCommandOutput | Format-List # On the success, print an empty line after the command output
         }
     }
 }
@@ -817,7 +820,7 @@ if (`$manifestFolder) {
 
 --> Comparing ARP Entries
 '@
-    (Compare-Object (Get-ARPTable) `$originalARP -Property DisplayName,DisplayVersion,Publisher,ProductCode,Scope)| Select-Object -Property * -ExcludeProperty SideIndicator | Format-Table
+    (Compare-Object (Get-ARPTable) `$originalARP -Property DisplayName,DisplayVersion,Publisher,ProductCode,Scope)| Select-Object -Property * -ExcludeProperty SideIndicator | Format-List
 }
 
 `$BoundParameterScript = Get-ChildItem -Filter 'BoundParameterScript.ps1'
