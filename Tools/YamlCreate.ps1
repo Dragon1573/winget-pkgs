@@ -42,10 +42,20 @@ param
   [Parameter(Mandatory = $false)]
   [string] $PackageVersion,
   [Parameter(Mandatory = $false)]
-  [string] $Mode
+  [string] $Mode,
+  [string] $Proxy = $null
 )
 $ProgressPreference = 'SilentlyContinue'
 $InformationPreference = 'Continue'
+
+if (!$Proxy) {
+  # Try inspect the system-level proxy settings by visiting GitHub RESTful API Endpoint and extract proxy settings from it.
+  # This is a bit of a hack, but it works for most cases.
+  Write-Verbose 'No Proxy specified! Trying to get the system-level proxy settings.'
+  $proxyInfo = [System.Net.WebRequest]::GetSystemWebProxy().GetProxy('https://api.github.com/')
+  $Proxy = $proxyInfo.Scheme + "://" + $proxyInfo.Host + ':' + $proxyInfo.Port
+}
+Write-Information "Using Proxy: $Proxy"
 
 if ($help) {
   Write-Host -ForegroundColor 'Green' 'For full documentation of the script, see https://github.com/microsoft/winget-pkgs/tree/master/doc/tools/YamlCreate.md'
@@ -289,11 +299,11 @@ $SchemaUrls = @{
 
 # Fetch Schema data from github for entry validation, key ordering, and automatic commenting
 try {
-  $LocaleSchema = @(Invoke-WebRequest $SchemaUrls.defaultLocale -UseBasicParsing | ConvertFrom-Json)
+  $LocaleSchema = @(Invoke-WebRequest -Proxy $Proxy $SchemaUrls.defaultLocale -UseBasicParsing | ConvertFrom-Json)
   $LocaleProperties = (ConvertTo-Yaml $LocaleSchema.properties | ConvertFrom-Yaml -Ordered).Keys
-  $VersionSchema = @(Invoke-WebRequest $SchemaUrls.version -UseBasicParsing | ConvertFrom-Json)
+  $VersionSchema = @(Invoke-WebRequest -Proxy $Proxy $SchemaUrls.version -UseBasicParsing | ConvertFrom-Json)
   $VersionProperties = (ConvertTo-Yaml $VersionSchema.properties | ConvertFrom-Yaml -Ordered).Keys
-  $InstallerSchema = @(Invoke-WebRequest $SchemaUrls.installer -UseBasicParsing | ConvertFrom-Json)
+  $InstallerSchema = @(Invoke-WebRequest -Proxy $Proxy $SchemaUrls.installer -UseBasicParsing | ConvertFrom-Json)
   $InstallerProperties = (ConvertTo-Yaml $InstallerSchema.properties | ConvertFrom-Yaml -Ordered).Keys
   $InstallerSwitchProperties = (ConvertTo-Yaml $InstallerSchema.definitions.InstallerSwitches.properties | ConvertFrom-Yaml -Ordered).Keys
   $InstallerEntryProperties = (ConvertTo-Yaml $InstallerSchema.definitions.Installer.properties | ConvertFrom-Yaml -Ordered).Keys
@@ -3165,7 +3175,7 @@ do {
 # Check the api for open PR's
 # This is unauthenticated because the call-rate per minute is assumed to be low
 if ($ScriptSettings.ContinueWithExistingPRs -ne 'always' -and $script:Option -ne 'RemoveManifest' -and !$SkipPRCheck) {
-  $PRApiResponse = @(Invoke-WebRequest "https://api.github.com/search/issues?q=repo%3Amicrosoft%2Fwinget-pkgs%20is%3Apr%20$($PackageIdentifier -replace '\.', '%2F'))%2F$PackageVersion%20in%3Apath&per_page=1" -UseBasicParsing -ErrorAction SilentlyContinue | ConvertFrom-Json)[0]
+  $PRApiResponse = @(Invoke-WebRequest -Proxy $Proxy "https://api.github.com/search/issues?q=repo%3Amicrosoft%2Fwinget-pkgs%20is%3Apr%20$($PackageIdentifier -replace '\.', '%2F'))%2F$PackageVersion%20in%3Apath&per_page=1" -UseBasicParsing -ErrorAction SilentlyContinue | ConvertFrom-Json)[0]
   # If there was a PR found, get the URL and title
   if ($PRApiResponse.total_count -gt 0) {
     $_PRUrl = $PRApiResponse.items.html_url
