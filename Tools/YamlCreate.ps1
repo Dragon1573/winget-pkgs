@@ -43,6 +43,7 @@ Param
   [string] $Mode
 )
 $ProgressPreference = 'SilentlyContinue'
+$InformationPreference = 'Continue'
 
 if ($help) {
   Write-Host -ForegroundColor 'Green' 'For full documentation of the script, see https://github.com/microsoft/winget-pkgs/tree/master/doc/tools/YamlCreate.md'
