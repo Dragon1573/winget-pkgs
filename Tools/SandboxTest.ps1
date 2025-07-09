@@ -36,7 +36,8 @@ param(
     [switch] $SkipManifestValidation,
     [switch] $Prerelease,
     [switch] $EnableExperimentalFeatures,
-    [switch] $Clean
+    [switch] $Clean,
+    [string] $Proxy = $null
 )
 
 enum DependencySources {
@@ -107,6 +108,24 @@ if ($script:PrefferMemorySize -le 2048) {
 Add-Type -AssemblyName System.Net.Http
 $script:HttpClient = New-Object System.Net.Http.HttpClient
 $script:CleanupPaths = @()
+
+# Network behavior
+$script:RegistryPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings"
+if (!$Proxy) {
+    # Try inspect the system-level proxy settings by visiting GitHub RESTful API Endpoint and extract proxy settings from it.
+    # This is a bit of a hack, but it works for most cases.
+    Write-Verbose 'No Proxy specified! Trying to get the system-level proxy settings.'
+    $proxyInfo = [System.Net.WebRequest]::GetSystemWebProxy().GetProxy('https://api.github.com/')
+    if ($proxyInfo.Scheme -and $proxyInfo.Host -and $proxyInfo.Port) {
+        $Proxy = $proxyInfo.Scheme + "://" + $proxyInfo.Host + ':' + $proxyInfo.Port
+        Write-Information "Using Proxy: $Proxy"
+    }
+    else {
+        # No proxy settings found
+        Write-Information "No Proxy settings found! Try without proxy ..."
+        $Proxy = $null
+    }
+}
 
 # Removed the `-GitHubToken`parameter, always use environment variable
 # It is possible that the environment variable may not exist, in which case this may be null
@@ -200,6 +219,7 @@ Please consider adding your token using the `WINGET_PKGS_GITHUB_TOKEN` environme
 "@
     }
 
+    if ($Proxy) { $requestParameters.Proxy = $Proxy }
     $releasesAPIResponse = Invoke-RestMethod @requestParameters
     if (!$script:Prerelease) {
         $releasesAPIResponse = $releasesAPIResponse.Where({ !$_.prerelease })
@@ -231,7 +251,14 @@ function Get-RemoteContent {
         $response = @{ StatusCode = 400 }
     }
     else {
-        $response = Invoke-WebRequest -Uri $URL -Method Head -ErrorAction SilentlyContinue
+        # Try to fetch headers from the URL
+        $webRequestParams = @{
+            Uri = $URL
+            Method = 'Head'
+            ErrorAction = 'SilentlyContinue'
+        }
+        if ($Proxy) { $webRequestParams.Proxy = $Proxy }
+        $response = Invoke-WebRequest @webRequestParams
     }
     if ($response.StatusCode -ne 200) {
         Write-Debug "Fetching remote content from $URL returned status code $($response.StatusCode)"
@@ -456,6 +483,7 @@ function Test-GithubToken {
     }
 
     Write-Verbose "Checking Token against $($requestParameters.Uri)"
+    if ($Proxy) { $requestParameters.Proxy = $Proxy }
     $apiResponse = Invoke-WebRequest @requestParameters # This will return an exception if the token is not valid; It is intentionally not caught
     # The headers can sometimes be a single string, or an array of strings. Cast them into an array anyways just for safety
     $rateLimit = @($apiResponse.Headers['X-RateLimit-Limit'])
@@ -753,6 +781,25 @@ function Get-ARPTable {
         Select-Object DisplayName, DisplayVersion, Publisher, @{N='ProductCode'; E={`$_.PSChildName}}, @{N='Scope'; E={if(`$_.PSDrive.Name -eq 'HKCU') {'User'} else {'Machine'}}}
 }
 
+"@ | Out-File -FilePath $(Join-Path -Path $script:TestDataFolder -ChildPath "$script:ScriptName.ps1")
+
+if ($Proxy) {
+    @"
+Write-Host @'
+--> Injecting proxy settings from the host with Windows Registry
+'@
+New-Item -Path "$script:RegistryPath" -ErrorAction SilentlyContinue | Out-Null
+Set-ItemProperty -Path "$script:RegistryPath" -Name ProxyEnable -Value 1 -Type DWord | Out-Null
+Set-ItemProperty -Path "$script:RegistryPath" -Name ProxyServer -Value "$Proxy" -Type String | Out-Null
+Set-ItemProperty -Path "$script:RegistryPath" -Name ProxyOverride -Value "<local>,*.local,*.cn" -Type String | Out-Null
+Get-ItemProperty -Path "$script:RegistryPath" |
+    Select-Object -Property ProxyEnable, ProxyServer, ProxyOverride |
+    Format-List
+
+"@ | Out-File -Append -FilePath $(Join-Path -Path $script:TestDataFolder -ChildPath "$script:ScriptName.ps1")
+}
+
+@"
 Push-Location $($script:SandboxTestDataFolder)
 Write-Host @'
 --> Installing WinGet
@@ -797,6 +844,16 @@ Write-Host @'
 '@
 winget settings --Enable LocalManifestFiles
 winget settings --Enable LocalArchiveMalwareScanOverride
+"@ | Out-File -Append -FilePath $(Join-Path -Path $script:TestDataFolder -ChildPath "$script:ScriptName.ps1")
+
+if ($Proxy) {
+    @"
+winget settings --Enable ProxyCommandLineOptions
+winget settings set DefaultProxy $Proxy
+"@ | Out-File -Append -FilePath $(Join-Path -Path $script:TestDataFolder -ChildPath "$script:ScriptName.ps1")
+}
+
+@"
 Get-ChildItem -Filter 'settings.json' | Copy-Item -Destination C:\Users\WDAGUtilityAccount\AppData\Local\Packages\Microsoft.DesktopAppInstaller_8wekyb3d8bbwe\LocalState\settings.json
 Set-WinHomeLocation -GeoID $($script:HostGeoID)
 
@@ -836,7 +893,7 @@ if (`$BoundParameterScript) {
 }
 
 Pop-Location
-"@ | Out-File -FilePath $(Join-Path -Path $script:TestDataFolder -ChildPath "$script:ScriptName.ps1")
+"@ | Out-File -Append -FilePath $(Join-Path -Path $script:TestDataFolder -ChildPath "$script:ScriptName.ps1")
 
 # Create the WSB file
 # Although this could be done using the native XML processor, it's easier to just write the content directly as a string
