@@ -92,6 +92,12 @@ $script:SandboxWorkingDirectory = Join-Path -Path $script:SandboxDesktopFolder -
 $script:SandboxTestDataFolder = Join-Path -Path $script:SandboxDesktopFolder -ChildPath $($script:TestDataFolder | Split-Path -Leaf)
 $script:SandboxBootstrapFile = Join-Path -Path $script:SandboxTestDataFolder -ChildPath "$script:ScriptName.ps1"
 $script:HostGeoID = (Get-WinHomeLocation).GeoID
+# Use quater of the physical memory size for the sandbox, for increasing performance.
+$script:PrefferMemorySize = ((Get-WmiObject Win32_PhysicalMemory).Capacity | Measure-Object Capacity -Sum).Sum / (1MB) / 4
+if ($script:PrefferMemorySize -le 2048) {
+    # Physical memory is TOO small! Set the minimum to 2GB.
+    $script:PrefferMemorySize = 2048 # Minimum of 2GB
+}
 
 # Misc
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -841,6 +847,7 @@ Write-Verbose 'Creating WSB file for launching the sandbox'
   <LogonCommand>
   <Command>PowerShell Start-Process PowerShell -WindowStyle Maximized -WorkingDirectory '$($script:SandboxWorkingDirectory)' -ArgumentList '-ExecutionPolicy Bypass -NoExit -NoLogo -File $($script:SandboxBootstrapFile)'</Command>
   </LogonCommand>
+  <memoryInMB>$script:PrefferMemorySize</memoryInMB>
 </Configuration>
 "@ | Out-File -FilePath $script:ConfigurationFile
 
