@@ -31,8 +31,15 @@ jobs:
 
       - name: Configure upstream branch
         run: |
-          git remote add upstream https://github.com/microsoft/winget-pkgs.git
-          git fetch --progress upstream +refs/heads/master:refs/remotes/upstream/master
+            upstream_exists=$(git remote | grep upstream || echo "")
+            if [ -z "$upstream_exists" ]; then
+              echo "::group::Adding upstream"
+              git remote add upstream https://github.com/microsoft/winget-pkgs.git
+              echo "::endgroup::"
+            fi
+            echo "::group::Fetching upstream"
+            git fetch --progress --verbose --prune upstream master
+            echo "::endgroup::"
 
       - name: Rebase with upstream
         run: |
