@@ -1,0 +1,36 @@
+# Created with komac v2.13.0
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.10.0.schema.json
+
+PackageIdentifier: mostlygeek.llama-swap
+PackageVersion: '163'
+PackageLocale: en-US
+Publisher: Benson Wong
+PublisherUrl: https://github.com/mostlygeek
+PublisherSupportUrl: https://github.com/mostlygeek/llama-swap/issues
+Author: Benson Wong
+PackageName: llama-swap
+PackageUrl: https://github.com/mostlygeek/llama-swap
+License: MIT
+LicenseUrl: https://github.com/mostlygeek/llama-swap/blob/main/LICENSE.md
+Copyright: Copyright (c) 2024 Benson Wong
+CopyrightUrl: https://github.com/mostlygeek/llama-swap/blob/main/LICENSE.md
+ShortDescription: Model swapping for llama.cpp (or any local OpenAI API compatible server)
+Description: |-
+  llama-swap is a light weight, transparent proxy server that provides automatic
+  model swapping to llama.cpp's server.
+
+  Written in golang, it is very easy to install (single binary with no
+  dependencies) and configure (single yaml file). To get started, download a
+  pre-built binary, a provided docker images or Homebrew.
+Tags:
+- golang
+- llama
+- llamacpp
+- localllama
+- localllm
+- openai
+- openai-api
+- vllm
+ReleaseNotesUrl: https://github.com/mostlygeek/llama-swap/releases/tag/v163
+ManifestType: defaultLocale
+ManifestVersion: 1.10.0
