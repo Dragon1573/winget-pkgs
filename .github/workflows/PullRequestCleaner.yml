@@ -20,9 +20,11 @@ jobs:
         git config --global user.name Dragon1573
         git config --global user.email 49941141+Dragon1573@noreply.users.github.com
     - name: Remove merged pull requests
-      uses: michidk/run-komac@v2.1.0
+      uses: michidk/run-komac@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        args: 'clean -a -t ${{ secrets.GITHUB_TOKEN }}'
+        args: 'clean -a'
         custom-fork-owner: Dragon1573
         custom-tool: WinGet-Subscriber
         custom-tool-url: https://github.com/Dragon1573/winget-pkgs/tree/bot
