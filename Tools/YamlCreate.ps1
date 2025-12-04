@@ -51,9 +51,16 @@ if (!$Proxy) {
   # This is a bit of a hack, but it works for most cases.
   Write-Verbose 'No Proxy specified! Trying to get the system-level proxy settings.'
   $proxyInfo = [System.Net.WebRequest]::GetSystemWebProxy().GetProxy('https://api.github.com/')
-  $Proxy = $proxyInfo.Scheme + "://" + $proxyInfo.Host + ':' + $proxyInfo.Port
+  if ($proxyInfo.Scheme -and $proxyInfo.Host -and $proxyInfo.Port) {
+    $Proxy = $proxyInfo.Scheme + "://" + $proxyInfo.Host + ':' + $proxyInfo.Port
+    Write-Information "Using Proxy: $Proxy"
+  }
+  else {
+    # No proxy settings found
+    Write-Information "No Proxy settings found! Try without proxy ..."
+    $Proxy = $null
+  }
 }
-Write-Information "Using Proxy: $Proxy"
 
 if ($help) {
   Write-Host -ForegroundColor 'Green' 'For full documentation of the script, see https://github.com/microsoft/winget-pkgs/tree/master/doc/tools/YamlCreate.md'
