@@ -23,7 +23,7 @@ jobs:
     steps:
     - name: Download the installer file
       shell: bash
-      run: wget -v -O "installer.${{ inputs.extension }}" "${{ inputs.url }}"
+      run: wget --show-progress -O "installer.${{ inputs.extension }}" "${{ inputs.url }}"
     - name: Inspect with Komac
       uses: michidk/run-komac@v2.1.0
       with:
