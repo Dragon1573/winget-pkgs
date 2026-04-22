@@ -785,6 +785,14 @@ function Get-ARPTable {
         Select-Object DisplayName, DisplayVersion, Publisher, @{N='ProductCode'; E={`$_.PSChildName}}, @{N='Scope'; E={if(`$_.PSDrive.Name -eq 'HKCU') {'User'} else {'Machine'}}}
 }
 
+function Compare-ARPTable {
+    param (
+        [Parameter(Mandatory = `$true)] `$After,
+        [Parameter(Mandatory = `$true)] `$Before
+    )
+    (Compare-Object `$After `$Before -Property DisplayName,DisplayVersion,Publisher,ProductCode,Scope) |Select-Object -Property * -ExcludeProperty SideIndicator | Format-List
+}
+
 "@ | Out-File -FilePath $(Join-Path -Path $script:TestDataFolder -ChildPath "$script:ScriptName.ps1")
 
 if ($Proxy) {
@@ -922,7 +930,7 @@ if (`$manifestFolder) {
 
 --> Comparing ARP Entries
 '@
-    (Compare-Object (Get-ARPTable) `$originalARP -Property DisplayName,DisplayVersion,Publisher,ProductCode,Scope)| Select-Object -Property * -ExcludeProperty SideIndicator | Format-List
+    Compare-ARPTable -After (Get-ARPTable) -Before `$originalARP
 }
 
 `$BoundParameterScript = Get-ChildItem -Filter 'BoundParameterScript.ps1'
