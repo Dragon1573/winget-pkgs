@@ -1,9 +1,9 @@
 <!-- PR Title Format: "New package: Publisher.Name version X.Y.Z" or "Update: Publisher.Name to X.Y.Z" -->
 
-## 📖 Description
+## :book: Description
 <!-- Describe what this PR changes. For manifest submissions, include the package name and version. -->
 
-## ✅ Checklist
+## :white_check_mark: Checklist
 <!-- Place an "x" between the brackets to check an item. e.g: [x] -->
 
 - [ ] Signed the [Contributor License Agreement](https://cla.opensource.microsoft.com)
@@ -11,7 +11,7 @@
   <!-- Example: Resolves #328283 -->
   - Resolves #[Issue Number]
 
-## 📦 Manifest Checklist
+## :package: Manifest Checklist
 
 - [ ] Checked that there aren't other open [pull requests](https://github.com/microsoft/winget-pkgs/pulls) for the same manifest update/change
 - [ ] This PR only modifies one (1) manifest
