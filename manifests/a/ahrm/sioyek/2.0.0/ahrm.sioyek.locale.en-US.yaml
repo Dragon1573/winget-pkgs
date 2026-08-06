@@ -1,12 +1,21 @@
-# Created using wingetcreate 1.6.1.0
-# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
+# Created with komac v2.16.0
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json
 
 PackageIdentifier: ahrm.sioyek
 PackageVersion: 2.0.0
 PackageLocale: en-US
 Publisher: ahrm
+PublisherUrl: https://github.com/ahrm
+PublisherSupportUrl: https://github.com/ahrm/sioyek/issues
 PackageName: sioyek
+PackageUrl: https://github.com/ahrm/sioyek
 License: GPL-3.0
+LicenseUrl: https://github.com/ahrm/sioyek/blob/development/LICENSE
 ShortDescription: Sioyek is a PDF viewer with a focus on technical books and research papers.
+Tags:
+- pdf
+- pdf-viewer
+- research-paper
+ReleaseNotesUrl: https://ahrm.github.io/jekyll/update/2022/12/12/sioyek-2.html
 ManifestType: defaultLocale
-ManifestVersion: 1.6.0
+ManifestVersion: 1.12.0
