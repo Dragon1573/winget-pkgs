@@ -1,0 +1,26 @@
+# Created with komac v2.16.0
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json
+
+PackageIdentifier: Claris.FileMaker.Pro
+PackageVersion: 26.0.2.212
+PackageLocale: en-US
+Publisher: Claris International Inc.
+PublisherUrl: https://www.claris.com/company/
+PublisherSupportUrl: https://support.claris.com/s/
+PrivacyUrl: https://www.claris.com/company/legal/privacy.html
+PackageName: FileMaker Pro
+PackageUrl: https://www.claris.com/filemaker/
+License: Proprietary
+LicenseUrl: https://www.claris.com/company/legal/terms.html
+Copyright: © 2026 Claris International Inc.
+CopyrightUrl: https://www.claris.com/company/legal/
+ShortDescription: The platform built for developers.
+Description: >
+  FileMaker helps problem solvers turn their vision into solutions with production-ready software
+  and custom apps built on durable, reliable, enterprise-grade infrastructure.
+ReleaseNotesUrl: https://help.claris.com/en/pro-release-notes/content/index.html#26.0.2
+Documentations:
+- DocumentLabel: Documentation
+  DocumentUrl: https://help.claris.com/en/claris-help-center/
+ManifestType: defaultLocale
+ManifestVersion: 1.12.0

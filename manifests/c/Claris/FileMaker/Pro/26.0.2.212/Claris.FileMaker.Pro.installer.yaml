@@ -1,0 +1,21 @@
+# Created with komac v2.16.0
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json
+
+PackageIdentifier: Claris.FileMaker.Pro
+PackageVersion: 26.0.2.212
+InstallerType: exe
+InstallerSwitches:
+  Silent: Silent=1
+  SilentWithProgress: Silent=2
+InstallModes:
+- interactive
+- silent
+- silentWithProgress
+UpgradeBehavior: install
+ReleaseDate: 2026-07-15
+Installers:
+- Architecture: x64
+  InstallerUrl: https://downloads.claris.com/esd/fmp_26.0.2.212_x64.exe
+  InstallerSha256: 26DE0FB51ECA79F04AE8C9DB06FE5B71349429A63711895862BBF12745428FF2
+ManifestType: installer
+ManifestVersion: 1.12.0
